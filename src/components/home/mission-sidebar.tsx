@@ -4,8 +4,9 @@ import { StatusDot } from "@/components/ui/status-dot";
 import type { FailureEvent, Post } from "@/lib/types";
 import { padDay } from "@/lib/utils";
 
-export function MissionSidebar({ latestPost, failures }: { latestPost: Post; failures: FailureEvent[] }) {
+export function MissionSidebar({ latestPost, failures }: { latestPost: Post | null; failures: FailureEvent[] }) {
   const latestFailure = failures[0];
+  const nextDay = latestPost ? latestPost.dayNumber + 1 : 1;
 
   return (
     <aside className="grid gap-4 lg:col-span-4">
@@ -37,7 +38,7 @@ export function MissionSidebar({ latestPost, failures }: { latestPost: Post; fai
       </section>
       <section className="terminal-panel reveal rounded-[2rem] p-5" style={{ animationDelay: "300ms" }}>
         <p className="mono-label">next action</p>
-        <p className="mt-4 text-sm leading-6 text-muted">Publish {padDay(latestPost.dayNumber + 1)} before cutoff, log study hours, attach evidence, keep the system honest.</p>
+        <p className="mt-4 text-sm leading-6 text-muted">Publish {padDay(nextDay)} before cutoff, log study hours, attach evidence, keep the system honest.</p>
       </section>
     </aside>
   );

@@ -290,25 +290,26 @@ export async function getProfileComments(profileId: string) {
 export async function getDashboardSnapshot(): Promise<DashboardSnapshot> {
   const [posts, failures, profile] = await Promise.all([getPosts(12), getFailures(), getCurrentProfile()]);
 
-  const latestPost = posts[0] ?? dashboardSnapshot.latestPost;
-  const currentStreak = latestPost.streakAfterPost;
-  const studyHours = latestPost.studyHours;
+  const latestPost = posts[0] ?? null;
+  const currentStreak = latestPost ? latestPost.streakAfterPost : 0;
+  const studyHours = latestPost ? latestPost.studyHours : 0;
+  const physicsProgress = latestPost ? latestPost.physicsProgress : 0;
   const gymWindow = posts.slice(0, 14);
   const gymConsistency = gymWindow.length
     ? Math.round((gymWindow.filter((post) => post.gymComplete).length / gymWindow.length) * 100)
-    : dashboardSnapshot.metrics[2].value;
+    : 0;
 
   return {
     ...dashboardSnapshot,
     profile: profile ?? dashboardSnapshot.profile,
-    posts: posts.length ? posts : dashboardSnapshot.posts,
+    posts,
     latestPost,
     failures,
     metrics: [
-      { label: "Current streak", value: `${String(currentStreak).padStart(3, "0")} days`, delta: "+1 if posted before cutoff", status: "stable" },
+      { label: "Current streak", value: `${String(currentStreak).padStart(3, "0")} days`, delta: "+1 if posted before cutoff", status: currentStreak > 0 ? "stable" : "warning" },
       { label: "Today study", value: `${studyHours.toFixed(1)} h`, delta: "public daily log", status: studyHours >= 4 ? "stable" : "warning" },
-      { label: "Gym consistency", value: `${gymConsistency}%`, delta: "recent post window", status: Number(gymConsistency) >= 70 ? "stable" : "warning" },
-      { label: "Physics progress", value: `${latestPost.physicsProgress}%`, delta: "active unit", status: "stable" },
+      { label: "Gym consistency", value: `${gymConsistency}%`, delta: "recent post window", status: gymConsistency >= 70 ? "stable" : "warning" },
+      { label: "Physics progress", value: `${physicsProgress}%`, delta: "active unit", status: physicsProgress > 0 ? "stable" : "warning" },
     ],
   };
 }

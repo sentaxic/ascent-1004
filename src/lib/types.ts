@@ -93,7 +93,7 @@ export type DashboardSnapshot = {
   profile: Profile;
   metrics: MissionMetric[];
   dailyMetrics: DailyMetric[];
-  latestPost: Post;
+  latestPost: Post | null;
   posts: Post[];
   failures: FailureEvent[];
   analytics: AnalyticsPoint[];
