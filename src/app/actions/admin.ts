@@ -33,6 +33,29 @@ async function assertAdminSession() {
   return { supabase, user };
 }
 
+function mediaKindFromType(type: string, url: string) {
+  if (type.startsWith("video/")) return "video";
+  if (type === "image/gif" || url.toLowerCase().endsWith(".gif")) return "gif";
+  if (type.startsWith("image/")) return "image";
+  return "embed";
+}
+
+async function uploadManagedPostMedia(file: File, postId: string, index: number) {
+  const { supabase } = await assertAdminSession();
+  const extension = file.name.split(".").pop() || "bin";
+  const path = `${postId}/managed-${Date.now()}-${index}.${extension}`;
+
+  const { error } = await supabase.storage.from("post-media").upload(path, file, {
+    cacheControl: "31536000",
+    contentType: file.type,
+  });
+
+  if (error) throw new Error(error.message);
+
+  const { data } = supabase.storage.from("post-media").getPublicUrl(path);
+  return data.publicUrl;
+}
+
 
 function assertValidDate(value: string, field: string) {
   if (!value || Number.isNaN(new Date(value).getTime())) {
@@ -103,6 +126,11 @@ export async function updatePostAction(formData: FormData) {
     .map((tag) => tag.trim())
     .filter(Boolean)
     .slice(0, 10);
+  const mediaUrls = getString(formData, "mediaUrls")
+    .split("\n")
+    .map((url) => url.trim())
+    .filter(Boolean);
+  const files = formData.getAll("mediaFiles").filter((file): file is File => file instanceof File && file.size > 0);
 
   if (!postId || !title || !content) redirect("/admin?error=Post%20id,%20title,%20and%20content%20are%20required");
 
@@ -125,6 +153,35 @@ export async function updatePostAction(formData: FormData) {
     .eq("id", postId);
 
   if (error) redirect(`/admin?error=${encodeURIComponent(error.message)}`);
+
+  const mediaRows = [];
+  for (const [index, url] of mediaUrls.entries()) {
+    mediaRows.push({
+      post_id: postId,
+      kind: mediaKindFromType("", url),
+      url,
+      alt: `${title} media ${index + 1}`,
+      sort_order: index,
+    });
+  }
+
+  for (const [index, file] of files.entries()) {
+    const url = await uploadManagedPostMedia(file, postId, index);
+    mediaRows.push({
+      post_id: postId,
+      kind: mediaKindFromType(file.type, url),
+      url,
+      alt: file.name,
+      sort_order: mediaRows.length,
+    });
+  }
+
+  const { error: mediaDeleteError } = await supabase.from("post_media").delete().eq("post_id", postId);
+  if (mediaDeleteError) redirect(`/admin?error=${encodeURIComponent(mediaDeleteError.message)}`);
+  if (mediaRows.length) {
+    const { error: mediaInsertError } = await supabase.from("post_media").insert(mediaRows);
+    if (mediaInsertError) redirect(`/admin?error=${encodeURIComponent(mediaInsertError.message)}`);
+  }
 
   revalidateMission();
   if (originalSlug) revalidatePath(`/posts/${originalSlug}`);

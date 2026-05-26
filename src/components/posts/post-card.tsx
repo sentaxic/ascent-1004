@@ -8,7 +8,7 @@ import { padDay } from "@/lib/utils";
 
 export function PostCard({ post, compact = false }: { post: Post; compact?: boolean }) {
   return (
-    <article className="terminal-panel reveal rounded-[1.75rem] p-5 sm:p-6">
+    <article className="terminal-panel reveal overflow-hidden rounded-[1.75rem] p-5 sm:p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <span className="rounded-full border border-redline/40 bg-redline/10 px-3 py-1 text-xs uppercase tracking-[0.18em] text-redline">{padDay(post.dayNumber)}</span>
         <time className="text-xs text-muted">{formatMissionDate(post.publishedAt)}</time>
@@ -23,10 +23,15 @@ export function PostCard({ post, compact = false }: { post: Post; compact?: bool
         <ProgressBar value={post.gymComplete ? 100 : 12} label={post.gymComplete ? "gym complete" : "gym skipped"} />
         <ProgressBar value={post.physicsProgress} label="physics" />
       </div>
-      <div className="mt-5 flex flex-wrap gap-2">
-        {post.tags.map((tag) => (
-          <span key={tag} className="rounded-full border border-white/10 px-3 py-1 text-xs text-muted">#{tag}</span>
-        ))}
+      <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap gap-2">
+          {post.tags.length ? post.tags.map((tag) => (
+            <span key={tag} className="rounded-full border border-white/10 px-3 py-1 text-xs text-muted">#{tag}</span>
+          )) : <span className="rounded-full border border-white/10 px-3 py-1 text-xs text-muted">untagged</span>}
+        </div>
+        <Link href={`/posts/${post.slug}#comments`} className="text-xs uppercase tracking-[0.16em] text-redline">
+          {post.comments.length} comments
+        </Link>
       </div>
     </article>
   );

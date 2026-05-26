@@ -9,14 +9,15 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
       <form action={signInAction} className="space-y-4">
         <label className="block space-y-2">
           <span className="mono-label">Email</span>
-          <input className="field rounded-2xl px-4 py-3" name="email" type="email" autoComplete="email" required />
+          <input className="field rounded-2xl px-4 py-3" name="email" type="email" autoComplete="email" placeholder="you@example.com" required />
         </label>
         <label className="block space-y-2">
           <span className="mono-label">Password</span>
-          <input className="field rounded-2xl px-4 py-3" name="password" type="password" autoComplete="current-password" required />
+          <input className="field rounded-2xl px-4 py-3" name="password" type="password" autoComplete="current-password" placeholder="••••••••" required />
         </label>
         <button className="button-primary w-full rounded-2xl px-4 py-3 text-sm uppercase tracking-[0.16em]">Authenticate</button>
       </form>
+      <p className="mt-4 text-xs leading-5 text-muted">Admin-only pages stay hidden unless your profile role is set to admin in Supabase.</p>
     </AuthShell>
   );
 }

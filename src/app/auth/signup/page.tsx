@@ -10,22 +10,23 @@ export default async function SignupPage({ searchParams }: { searchParams: Promi
         <div className="grid gap-4 sm:grid-cols-2">
           <label className="block space-y-2">
             <span className="mono-label">Username</span>
-            <input className="field rounded-2xl px-4 py-3" name="username" autoComplete="username" required />
+            <input className="field rounded-2xl px-4 py-3" name="username" autoComplete="username" placeholder="observer_name" required />
+            <span className="input-help">The username Micheal is reserved for the operator account.</span>
           </label>
           <label className="block space-y-2">
             <span className="mono-label">Display name</span>
-            <input className="field rounded-2xl px-4 py-3" name="displayName" autoComplete="name" />
+            <input className="field rounded-2xl px-4 py-3" name="displayName" autoComplete="name" placeholder="Name shown on comments" />
           </label>
         </div>
         <label className="block space-y-2">
           <span className="mono-label">Email</span>
-          <input className="field rounded-2xl px-4 py-3" name="email" type="email" autoComplete="email" required />
+          <input className="field rounded-2xl px-4 py-3" name="email" type="email" autoComplete="email" placeholder="you@example.com" required />
         </label>
         <label className="block space-y-2">
           <span className="mono-label">Password</span>
-          <input className="field rounded-2xl px-4 py-3" name="password" type="password" minLength={8} autoComplete="new-password" required />
+          <input className="field rounded-2xl px-4 py-3" name="password" type="password" minLength={8} autoComplete="new-password" placeholder="At least 8 characters" required />
         </label>
-        <button className="button-primary w-full rounded-2xl px-4 py-3 text-sm uppercase tracking-[0.16em]">Create account</button>
+        <button className="button-primary w-full rounded-2xl px-4 py-3 text-sm uppercase tracking-[0.16em]">Create observer account</button>
       </form>
     </AuthShell>
   );
