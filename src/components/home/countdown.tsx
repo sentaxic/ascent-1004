@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-import { siteConfig } from "@/lib/config";
+import type { MissionSettings } from "@/lib/types";
 
 function diffParts(target: Date) {
   const diff = Math.max(target.getTime() - Date.now(), 0);
@@ -13,13 +13,15 @@ function diffParts(target: Date) {
   return { totalDays, hours, minutes, seconds };
 }
 
-export function Countdown() {
-  const target = useMemo(() => new Date(siteConfig.applicationDeadline), []);
-  const decision = useMemo(() => new Date(siteConfig.decisionHorizon), []);
+export function Countdown({ settings }: { settings: MissionSettings }) {
+  const target = useMemo(() => new Date(settings.applicationDeadline), [settings.applicationDeadline]);
+  const decision = useMemo(() => new Date(settings.decisionHorizon), [settings.decisionHorizon]);
   const [parts, setParts] = useState(() => diffParts(target));
   const [decisionParts, setDecisionParts] = useState(() => diffParts(decision));
 
   useEffect(() => {
+    setParts(diffParts(target));
+    setDecisionParts(diffParts(decision));
     const timer = window.setInterval(() => {
       setParts(diffParts(target));
       setDecisionParts(diffParts(decision));
@@ -32,12 +34,12 @@ export function Countdown() {
       <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-redline/80 to-transparent" />
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <p className="mono-label text-redline">primary countdown / MIT application horizon</p>
+          <p className="mono-label text-redline">{settings.countdownLabel}</p>
           <h1 className="mt-4 max-w-4xl text-4xl font-semibold leading-[0.95] tracking-[-0.08em] text-ash sm:text-6xl lg:text-7xl">
             {parts.totalDays.toLocaleString()} days
           </h1>
           <p className="mt-4 max-w-2xl text-sm leading-6 text-muted sm:text-base">
-            10th grade long-range mission. Default target is Jan 5, 2029, with Pi Day 2029 tracked as the symbolic decision horizon.
+            {settings.countdownDescription}
           </p>
         </div>
         <div className="rounded-2xl border border-redline/25 bg-redline/[0.06] px-4 py-3 text-right">

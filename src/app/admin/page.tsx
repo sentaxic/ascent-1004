@@ -3,6 +3,8 @@ export const dynamic = "force-dynamic";
 import { notFound } from "next/navigation";
 
 import { CreatePostForm } from "@/components/admin/create-post-form";
+import { MissionSettingsForm } from "@/components/admin/mission-settings-form";
+import { PostManager } from "@/components/admin/post-manager";
 import { AnalyticsChart } from "@/components/ui/mini-chart";
 import { hasSupabaseEnv } from "@/lib/config";
 import { getCurrentProfile, getDashboardSnapshot } from "@/lib/data";
@@ -24,6 +26,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
       </div>
 
       {params.error ? <p className="mb-5 rounded-2xl border border-redline/35 bg-redline/[0.08] p-4 text-sm text-redline">{params.error}</p> : null}
+      {params.message ? <p className="mb-5 rounded-2xl border border-white/10 bg-white/[0.04] p-4 text-sm text-ash">{params.message}</p> : null}
 
       <div className="grid gap-5 lg:grid-cols-4">
         {[
@@ -58,6 +61,12 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
         </section>
       </div>
 
+      {hasSupabaseEnv() ? (
+        <div className="mt-5">
+          <MissionSettingsForm settings={snapshot.settings} />
+        </div>
+      ) : null}
+
       <div className="mt-5">
         {hasSupabaseEnv() ? <CreatePostForm /> : (
           <section className="terminal-panel rounded-[2rem] p-6 text-sm leading-6 text-muted">
@@ -65,6 +74,12 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
           </section>
         )}
       </div>
+
+      {hasSupabaseEnv() ? (
+        <div className="mt-5">
+          <PostManager posts={snapshot.posts} failures={snapshot.failures} />
+        </div>
+      ) : null}
     </div>
   );
 }

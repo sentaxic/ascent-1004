@@ -13,8 +13,8 @@ export default async function HomePage() {
   return (
     <div className="container-shell py-8 sm:py-12">
       <div className="grid gap-5 lg:grid-cols-12">
-        <Countdown />
-        <MissionSidebar latestPost={snapshot.latestPost} failures={snapshot.failures} />
+        <Countdown settings={snapshot.settings} />
+        <MissionSidebar latestPost={snapshot.latestPost} failures={snapshot.failures} settings={snapshot.settings} />
       </div>
       <div className="mt-5">
         <MetricGrid metrics={snapshot.metrics} />

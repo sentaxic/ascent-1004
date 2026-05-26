@@ -1,7 +1,32 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 import { missionDateKey, siteConfig } from "@/lib/config";
+import { defaultMissionSettings } from "@/lib/seed-data";
 import { createAdminClient } from "@/lib/supabase/admin";
+
+
+async function getCronSettings(supabase: NonNullable<ReturnType<typeof createAdminClient>>) {
+  const { data } = await supabase
+    .from("mission_settings")
+    .select("mission_time_zone, missed_day_cutoff_hour")
+    .eq("id", true)
+    .maybeSingle();
+
+  return {
+    missionTimeZone: data?.mission_time_zone || defaultMissionSettings.missionTimeZone,
+    missedDayCutoffHour: Number(data?.missed_day_cutoff_hour ?? defaultMissionSettings.missedDayCutoffHour),
+  };
+}
+
+function localHour(date: Date, timeZone: string) {
+  const hour = new Intl.DateTimeFormat("en", {
+    timeZone,
+    hour: "2-digit",
+    hourCycle: "h23",
+  }).format(date);
+
+  return Number(hour);
+}
 
 async function publishInstagramFailure(caption: string) {
   const accountId = process.env.INSTAGRAM_ACCOUNT_ID;
@@ -57,7 +82,12 @@ export async function GET(request: NextRequest) {
   if (!supabase) return NextResponse.json({ ok: true, mode: "demo", message: "Supabase admin env not configured" });
 
   const now = new Date();
-  const today = missionDateKey(now);
+  const settings = await getCronSettings(supabase);
+  const today = missionDateKey(now, settings.missionTimeZone);
+
+  if (localHour(now, settings.missionTimeZone) < settings.missedDayCutoffHour) {
+    return NextResponse.json({ ok: true, status: "before_cutoff", today, cutoffHour: settings.missedDayCutoffHour });
+  }
 
   const { data: todayPost } = await supabase
     .from("posts")
@@ -84,7 +114,16 @@ export async function GET(request: NextRequest) {
     .limit(1)
     .maybeSingle();
 
-  const nextDay = Number(latestPost?.day_number ?? 0) + 1;
+  if (!latestPost) {
+    return NextResponse.json({
+      ok: true,
+      status: "mission_not_started",
+      today,
+      message: "No failure is recorded before the first real Day 001 post exists.",
+    });
+  }
+
+  const nextDay = Number(latestPost.day_number) + 1;
   const caption = `ASCENT-1004 FAILURE ARCHIVE: ${today}. ${siteConfig.adminUsername} missed the daily public log before cutoff. Streak failure recorded. DAY ${String(nextDay).padStart(3, "0")} remains unpaid.`;
 
   let instagram = { posted: false, permalink: null as string | null, provider: "not_attempted" };
@@ -98,7 +137,7 @@ export async function GET(request: NextRequest) {
   const { error } = await supabase.from("failure_events").insert({
     day_number: nextDay,
     failure_date: today,
-    reason: `No public post was published before the daily cutoff hour (${siteConfig.missedDayCutoffHour}:00 ${siteConfig.missionTimeZone}).`,
+    reason: `No public post was published before the daily cutoff hour (${settings.missedDayCutoffHour}:00 ${settings.missionTimeZone}).`,
     severity: "critical",
     auto_posted_to_instagram: instagram.posted,
     instagram_permalink: instagram.permalink,

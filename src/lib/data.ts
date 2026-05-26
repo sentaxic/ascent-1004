@@ -1,8 +1,8 @@
 import { notFound } from "next/navigation";
 
-import { dashboardSnapshot, failures as seedFailures, findDemoProfile, posts as seedPosts } from "@/lib/seed-data";
+import { dashboardSnapshot, defaultMissionSettings, failures as seedFailures, findDemoProfile, posts as seedPosts } from "@/lib/seed-data";
 import { createClient } from "@/lib/supabase/server";
-import type { Comment, DashboardSnapshot, FailureEvent, Post, PostMedia, Profile } from "@/lib/types";
+import type { Comment, DashboardSnapshot, FailureEvent, MissionSettings, Post, PostMedia, Profile } from "@/lib/types";
 
 const POST_SELECT = "id, day_number, slug, title, excerpt, content, published_at, mission_date, tags, study_hours, gym_complete, physics_progress, streak_after_post";
 
@@ -61,6 +61,20 @@ type DbFailure = {
   auto_posted_to_instagram: boolean;
   instagram_permalink: string | null;
   created_at: string;
+};
+
+
+type DbMissionSettings = {
+  application_deadline: string;
+  decision_horizon: string;
+  mission_time_zone: string;
+  missed_day_cutoff_hour: number;
+  countdown_label: string | null;
+  countdown_description: string | null;
+  operator_name: string | null;
+  operator_title: string | null;
+  operator_bio: string | null;
+  next_action_copy: string | null;
 };
 
 function mapProfile(profile: DbProfile, commentCount?: number): Profile {
@@ -135,6 +149,22 @@ function mapPost(post: DbPost, media: DbMedia[] = [], comments: DbComment[] = []
   };
 }
 
+
+function buildDailyMetrics(posts: Post[]) {
+  if (!posts.length) return dashboardSnapshot.dailyMetrics;
+
+  return [...posts]
+    .sort((a, b) => a.dayNumber - b.dayNumber)
+    .slice(-6)
+    .map((post) => ({
+      date: `D${String(post.dayNumber).padStart(3, "0")}`,
+      studyHours: post.studyHours,
+      gymComplete: post.gymComplete,
+      physicsPercent: post.physicsProgress,
+      streak: post.streakAfterPost,
+    }));
+}
+
 function mapFailure(failure: DbFailure): FailureEvent {
   return {
     id: failure.id,
@@ -145,6 +175,24 @@ function mapFailure(failure: DbFailure): FailureEvent {
     autoPostedToInstagram: failure.auto_posted_to_instagram,
     instagramPermalink: failure.instagram_permalink,
     createdAt: failure.created_at,
+  };
+}
+
+
+function mapMissionSettings(settings: DbMissionSettings | null): MissionSettings {
+  if (!settings) return defaultMissionSettings;
+
+  return {
+    applicationDeadline: settings.application_deadline,
+    decisionHorizon: settings.decision_horizon,
+    missionTimeZone: settings.mission_time_zone,
+    missedDayCutoffHour: settings.missed_day_cutoff_hour,
+    countdownLabel: settings.countdown_label || defaultMissionSettings.countdownLabel,
+    countdownDescription: settings.countdown_description || defaultMissionSettings.countdownDescription,
+    operatorName: settings.operator_name || defaultMissionSettings.operatorName,
+    operatorTitle: settings.operator_title || defaultMissionSettings.operatorTitle,
+    operatorBio: settings.operator_bio || defaultMissionSettings.operatorBio,
+    nextActionCopy: settings.next_action_copy || defaultMissionSettings.nextActionCopy,
   };
 }
 
@@ -226,6 +274,21 @@ export async function getFailures() {
   return (data as DbFailure[]).map(mapFailure);
 }
 
+
+export async function getMissionSettings() {
+  const supabase = await createClient();
+  if (!supabase) return defaultMissionSettings;
+
+  const { data, error } = await supabase
+    .from("mission_settings")
+    .select("application_deadline, decision_horizon, mission_time_zone, missed_day_cutoff_hour, countdown_label, countdown_description, operator_name, operator_title, operator_bio, next_action_copy")
+    .eq("id", true)
+    .maybeSingle();
+
+  if (error) return defaultMissionSettings;
+  return mapMissionSettings(data as DbMissionSettings | null);
+}
+
 export async function getCurrentProfile() {
   const supabase = await createClient();
   if (!supabase) return null;
@@ -288,7 +351,7 @@ export async function getProfileComments(profileId: string) {
 }
 
 export async function getDashboardSnapshot(): Promise<DashboardSnapshot> {
-  const [posts, failures, profile] = await Promise.all([getPosts(12), getFailures(), getCurrentProfile()]);
+  const [posts, failures, profile, settings] = await Promise.all([getPosts(12), getFailures(), getCurrentProfile(), getMissionSettings()]);
 
   const latestPost = posts[0] ?? null;
   const currentStreak = latestPost ? latestPost.streakAfterPost : 0;
@@ -299,17 +362,24 @@ export async function getDashboardSnapshot(): Promise<DashboardSnapshot> {
     ? Math.round((gymWindow.filter((post) => post.gymComplete).length / gymWindow.length) * 100)
     : 0;
 
+  const missionStarted = posts.length > 0;
+
   return {
     ...dashboardSnapshot,
     profile: profile ?? dashboardSnapshot.profile,
+    settings,
     posts,
     latestPost,
     failures,
+    dailyMetrics: buildDailyMetrics(posts),
+    visitorCount: missionStarted ? dashboardSnapshot.visitorCount : 0,
+    engagementRate: missionStarted ? dashboardSnapshot.engagementRate : 0,
+    analytics: missionStarted ? dashboardSnapshot.analytics : dashboardSnapshot.analytics.map((point) => ({ ...point, visitors: 0, comments: 0, studyHours: 0, consistency: 0 })),
     metrics: [
-      { label: "Current streak", value: `${String(currentStreak).padStart(3, "0")} days`, delta: "+1 if posted before cutoff", status: currentStreak > 0 ? "stable" : "warning" },
-      { label: "Today study", value: `${studyHours.toFixed(1)} h`, delta: "public daily log", status: studyHours >= 4 ? "stable" : "warning" },
-      { label: "Gym consistency", value: `${gymConsistency}%`, delta: "recent post window", status: gymConsistency >= 70 ? "stable" : "warning" },
-      { label: "Physics progress", value: `${physicsProgress}%`, delta: "active unit", status: physicsProgress > 0 ? "stable" : "warning" },
+      { label: "Current streak", value: `${String(currentStreak).padStart(3, "0")} days`, delta: missionStarted ? "+1 if posted before cutoff" : "mission not started", status: currentStreak > 0 ? "stable" : "warning" },
+      { label: "Today study", value: `${studyHours.toFixed(1)} h`, delta: missionStarted ? "latest public log" : "awaiting Day 001", status: studyHours >= 4 ? "stable" : "warning" },
+      { label: "Gym consistency", value: `${gymConsistency}%`, delta: missionStarted ? "recent post window" : "awaiting Day 001", status: gymConsistency >= 70 ? "stable" : "warning" },
+      { label: "Physics progress", value: `${physicsProgress}%`, delta: missionStarted ? "active unit" : "awaiting Day 001", status: physicsProgress > 0 ? "stable" : "warning" },
     ],
   };
 }

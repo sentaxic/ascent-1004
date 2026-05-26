@@ -1,5 +1,5 @@
 import { siteConfig } from "@/lib/config";
-import type { DashboardSnapshot, FailureEvent, Post, Profile } from "@/lib/types";
+import type { DashboardSnapshot, FailureEvent, MissionSettings, Post, Profile } from "@/lib/types";
 
 export const adminProfile: Profile = {
   id: "admin-demo-micheal",
@@ -30,12 +30,28 @@ const demoUser: Profile = {
   commentCount: 0,
 };
 
+
+export const defaultMissionSettings: MissionSettings = {
+  applicationDeadline: siteConfig.applicationDeadline,
+  decisionHorizon: siteConfig.decisionHorizon,
+  missionTimeZone: siteConfig.missionTimeZone,
+  missedDayCutoffHour: siteConfig.missedDayCutoffHour,
+  countdownLabel: "primary countdown / MIT application horizon",
+  countdownDescription:
+    "10th grade long-range mission. Edit this timer and mission copy from the admin console whenever the target changes.",
+  operatorName: siteConfig.adminUsername,
+  operatorTitle: "admin / publish authority",
+  operatorBio: "Only the admin account can publish logs, moderate comments, view analytics, and upload official mission media.",
+  nextActionCopy: "Publish {day} before cutoff, log study hours, attach evidence, keep the system honest.",
+};
+
 export const posts: Post[] = [];
 
 export const failures: FailureEvent[] = [];
 
 export const dashboardSnapshot: DashboardSnapshot = {
   profile: adminProfile,
+  settings: defaultMissionSettings,
   metrics: [
     { label: "Current streak", value: "000 days", delta: "+1 if posted before cutoff", status: "warning" },
     { label: "Today study", value: "0.0 h", delta: "target 5.0 h", status: "warning" },

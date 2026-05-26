@@ -1,10 +1,10 @@
 import Link from "next/link";
 
 import { StatusDot } from "@/components/ui/status-dot";
-import type { FailureEvent, Post } from "@/lib/types";
+import type { FailureEvent, MissionSettings, Post } from "@/lib/types";
 import { padDay } from "@/lib/utils";
 
-export function MissionSidebar({ latestPost, failures }: { latestPost: Post | null; failures: FailureEvent[] }) {
+export function MissionSidebar({ latestPost, failures, settings }: { latestPost: Post | null; failures: FailureEvent[]; settings: MissionSettings }) {
   const latestFailure = failures[0];
   const nextDay = latestPost ? latestPost.dayNumber + 1 : 1;
 
@@ -18,11 +18,11 @@ export function MissionSidebar({ latestPost, failures }: { latestPost: Post | nu
         <div className="mt-5 flex items-center gap-4">
           <div className="grid size-16 place-items-center rounded-2xl border border-redline/35 bg-redline/10 text-2xl text-redline">M</div>
           <div>
-            <p className="text-xl text-ash">Micheal</p>
-            <p className="text-xs uppercase tracking-[0.18em] text-muted">admin / publish authority</p>
+            <p className="text-xl text-ash">{settings.operatorName}</p>
+            <p className="text-xs uppercase tracking-[0.18em] text-muted">{settings.operatorTitle}</p>
           </div>
         </div>
-        <p className="mt-5 text-sm leading-6 text-muted">Only the admin account can publish logs, moderate comments, view analytics, and upload official mission media.</p>
+        <p className="mt-5 text-sm leading-6 text-muted">{settings.operatorBio}</p>
       </section>
       <section className="terminal-panel reveal rounded-[2rem] p-5" style={{ animationDelay: "240ms" }}>
         <p className="mono-label text-redline">failure monitor</p>
@@ -38,7 +38,7 @@ export function MissionSidebar({ latestPost, failures }: { latestPost: Post | nu
       </section>
       <section className="terminal-panel reveal rounded-[2rem] p-5" style={{ animationDelay: "300ms" }}>
         <p className="mono-label">next action</p>
-        <p className="mt-4 text-sm leading-6 text-muted">Publish {padDay(nextDay)} before cutoff, log study hours, attach evidence, keep the system honest.</p>
+        <p className="mt-4 text-sm leading-6 text-muted">{settings.nextActionCopy.replace("{day}", padDay(nextDay))}</p>
       </section>
     </aside>
   );

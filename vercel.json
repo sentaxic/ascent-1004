@@ -2,7 +2,7 @@
   "crons": [
     {
       "path": "/api/cron/missed-day",
-      "schedule": "30 16 * * *"
+      "schedule": "0 * * * *"
     }
   ]
 }

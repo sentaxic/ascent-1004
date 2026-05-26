@@ -20,6 +20,19 @@ export type Profile = {
   commentCount?: number;
 };
 
+export type MissionSettings = {
+  applicationDeadline: string;
+  decisionHorizon: string;
+  missionTimeZone: string;
+  missedDayCutoffHour: number;
+  countdownLabel: string;
+  countdownDescription: string;
+  operatorName: string;
+  operatorTitle: string;
+  operatorBio: string;
+  nextActionCopy: string;
+};
+
 export type MissionMetric = {
   label: string;
   value: string;
@@ -91,6 +104,7 @@ export type AnalyticsPoint = {
 
 export type DashboardSnapshot = {
   profile: Profile;
+  settings: MissionSettings;
   metrics: MissionMetric[];
   dailyMetrics: DailyMetric[];
   latestPost: Post | null;
