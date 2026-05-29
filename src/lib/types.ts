@@ -1,4 +1,4 @@
-export type UserRole = "admin" | "user";
+export type UserRole = "admin" | "moderator" | "user";
 
 export type MediaKind = "image" | "gif" | "video" | "embed";
 
@@ -18,6 +18,32 @@ export type Profile = {
   joinDate: string;
   socialLinks: SocialLink[];
   commentCount?: number;
+  activityScore?: number;
+  streak?: number;
+  badges?: string[];
+  status?: "online" | "offline" | "unknown";
+};
+
+export type SectionTheme = "terminal" | "physics" | "gym" | "philosophy" | "ai" | "archive";
+
+export type ContentSection = {
+  id: string;
+  name: string;
+  slug: string;
+  description: string;
+  icon: string;
+  accentColor: string;
+  theme: SectionTheme;
+  bannerUrl: string | null;
+  layout: "timeline" | "magazine" | "research" | "gallery";
+  visibility: "public" | "private";
+  commentsEnabled: boolean;
+  featured: boolean;
+  archived: boolean;
+  sortOrder: number;
+  parentId: string | null;
+  moderatorIds: string[];
+  createdAt: string;
 };
 
 export type MissionSettings = {
@@ -31,6 +57,9 @@ export type MissionSettings = {
   operatorTitle: string;
   operatorBio: string;
   nextActionCopy: string;
+  failureMessageTemplate?: string;
+  instagramWebhookUrl?: string;
+  automationEnabled?: boolean;
 };
 
 export type MissionMetric = {
@@ -55,18 +84,31 @@ export type PostMedia = {
   alt: string;
   width?: number;
   height?: number;
+  orientation?: "landscape" | "portrait" | "square" | "cinematic";
+};
+
+export type CommentReaction = {
+  emoji: string;
+  count: number;
 };
 
 export type Comment = {
   id: string;
   postId: string;
-  author: Pick<Profile, "id" | "username" | "displayName" | "avatarUrl" | "role">;
+  parentId?: string | null;
+  author: Pick<Profile, "id" | "username" | "displayName" | "avatarUrl" | "role" | "status">;
   body: string;
   createdAt: string;
+  updatedAt?: string | null;
+  reactions?: CommentReaction[];
+  isDeleted?: boolean;
 };
 
 export type Post = {
   id: string;
+  sectionId: string;
+  sectionSlug: string;
+  sectionName: string;
   dayNumber: number;
   slug: string;
   title: string;
@@ -74,11 +116,19 @@ export type Post = {
   content: string;
   publishedAt: string;
   missionDate: string;
+  status: "draft" | "published" | "archived";
+  objective: string;
+  failures: string;
+  lessons: string;
   tags: string[];
   studyHours: number;
+  weightKg: number;
+  codingProgress: number;
   gymComplete: boolean;
   physicsProgress: number;
   streakAfterPost: number;
+  featured: boolean;
+  pinned: boolean;
   media: PostMedia[];
   comments: Comment[];
 };
@@ -105,6 +155,7 @@ export type AnalyticsPoint = {
 export type DashboardSnapshot = {
   profile: Profile;
   settings: MissionSettings;
+  sections: ContentSection[];
   metrics: MissionMetric[];
   dailyMetrics: DailyMetric[];
   latestPost: Post | null;

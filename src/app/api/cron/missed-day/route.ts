@@ -1,21 +1,30 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { ID, Permission, Query, Role } from "node-appwrite";
 
-import { missionDateKey, siteConfig } from "@/lib/config";
+import { appwriteConfig, missionDateKey, siteConfig } from "@/lib/config";
 import { defaultMissionSettings } from "@/lib/seed-data";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { createAdminClient } from "@/lib/appwrite/server";
 
+type AdminDatabases = NonNullable<ReturnType<typeof createAdminClient>>["databases"];
 
-async function getCronSettings(supabase: NonNullable<ReturnType<typeof createAdminClient>>) {
-  const { data } = await supabase
-    .from("mission_settings")
-    .select("mission_time_zone, missed_day_cutoff_hour")
-    .eq("id", true)
-    .maybeSingle();
+async function getCronSettings(databases: AdminDatabases) {
+  try {
+    const settings = await databases.getDocument({
+      databaseId: appwriteConfig.databaseId,
+      collectionId: appwriteConfig.collections.missionSettings,
+      documentId: "singleton",
+    });
 
-  return {
-    missionTimeZone: data?.mission_time_zone || defaultMissionSettings.missionTimeZone,
-    missedDayCutoffHour: Number(data?.missed_day_cutoff_hour ?? defaultMissionSettings.missedDayCutoffHour),
-  };
+    return {
+      missionTimeZone: (settings.missionTimeZone as string) || defaultMissionSettings.missionTimeZone,
+      missedDayCutoffHour: Number(settings.missedDayCutoffHour ?? defaultMissionSettings.missedDayCutoffHour),
+    };
+  } catch {
+    return {
+      missionTimeZone: defaultMissionSettings.missionTimeZone,
+      missedDayCutoffHour: defaultMissionSettings.missedDayCutoffHour,
+    };
+  }
 }
 
 function localHour(date: Date, timeZone: string) {
@@ -78,42 +87,41 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
   }
 
-  const supabase = createAdminClient();
-  if (!supabase) return NextResponse.json({ ok: true, mode: "demo", message: "Supabase admin env not configured" });
+  const admin = createAdminClient();
+  if (!admin) return NextResponse.json({ ok: true, mode: "demo", message: "Appwrite admin env not configured" });
 
+  const databases = admin.databases;
   const now = new Date();
-  const settings = await getCronSettings(supabase);
+  const settings = await getCronSettings(databases);
   const today = missionDateKey(now, settings.missionTimeZone);
 
   if (localHour(now, settings.missionTimeZone) < settings.missedDayCutoffHour) {
     return NextResponse.json({ ok: true, status: "before_cutoff", today, cutoffHour: settings.missedDayCutoffHour });
   }
 
-  const { data: todayPost } = await supabase
-    .from("posts")
-    .select("id")
-    .eq("mission_date", today)
-    .eq("status", "published")
-    .maybeSingle();
+  const todayPost = await databases.listDocuments({
+    databaseId: appwriteConfig.databaseId,
+    collectionId: appwriteConfig.collections.posts,
+    queries: [Query.equal("missionDate", today), Query.equal("status", "published"), Query.limit(1)],
+  });
 
-  if (todayPost) return NextResponse.json({ ok: true, status: "posted", today });
+  if (todayPost.total > 0) return NextResponse.json({ ok: true, status: "posted", today });
 
-  const { data: existingFailure } = await supabase
-    .from("failure_events")
-    .select("id")
-    .eq("failure_date", today)
-    .maybeSingle();
+  const existingFailure = await databases.listDocuments({
+    databaseId: appwriteConfig.databaseId,
+    collectionId: appwriteConfig.collections.failureEvents,
+    queries: [Query.equal("failureDate", today), Query.limit(1)],
+  });
 
-  if (existingFailure) return NextResponse.json({ ok: true, status: "already_archived", today });
+  if (existingFailure.total > 0) return NextResponse.json({ ok: true, status: "already_archived", today });
 
-  const { data: latestPost } = await supabase
-    .from("posts")
-    .select("day_number, streak_after_post")
-    .eq("status", "published")
-    .order("day_number", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  const latest = await databases.listDocuments({
+    databaseId: appwriteConfig.databaseId,
+    collectionId: appwriteConfig.collections.posts,
+    queries: [Query.equal("status", "published"), Query.orderDesc("dayNumber"), Query.limit(1)],
+  });
 
+  const latestPost = latest.documents[0];
   if (!latestPost) {
     return NextResponse.json({
       ok: true,
@@ -123,10 +131,14 @@ export async function GET(request: NextRequest) {
     });
   }
 
-  const nextDay = Number(latestPost.day_number) + 1;
+  const nextDay = Number(latestPost.dayNumber) + 1;
   const caption = `ASCENT-1004 FAILURE ARCHIVE: ${today}. ${siteConfig.adminUsername} missed the daily public log before cutoff. Streak failure recorded. DAY ${String(nextDay).padStart(3, "0")} remains unpaid.`;
 
-  let instagram = { posted: false, permalink: null as string | null, provider: "not_attempted" };
+  let instagram: { posted: boolean; permalink: string | null; provider: string } = {
+    posted: false,
+    permalink: null,
+    provider: "not_attempted",
+  };
 
   try {
     instagram = await publishInstagramFailure(caption);
@@ -134,16 +146,27 @@ export async function GET(request: NextRequest) {
     instagram = { posted: false, permalink: null, provider: error instanceof Error ? error.message : "instagram_failed" };
   }
 
-  const { error } = await supabase.from("failure_events").insert({
-    day_number: nextDay,
-    failure_date: today,
-    reason: `No public post was published before the daily cutoff hour (${settings.missedDayCutoffHour}:00 ${settings.missionTimeZone}).`,
-    severity: "critical",
-    auto_posted_to_instagram: instagram.posted,
-    instagram_permalink: instagram.permalink,
-  });
-
-  if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+  try {
+    await databases.createDocument({
+      databaseId: appwriteConfig.databaseId,
+      collectionId: appwriteConfig.collections.failureEvents,
+      documentId: ID.unique(),
+      data: {
+        dayNumber: nextDay,
+        failureDate: today,
+        reason: `No public post was published before the daily cutoff hour (${settings.missedDayCutoffHour}:00 ${settings.missionTimeZone}).`,
+        severity: "critical",
+        autoPostedToInstagram: instagram.posted,
+        instagramPermalink: instagram.permalink,
+      },
+      permissions: [Permission.read(Role.any())],
+    });
+  } catch (error) {
+    return NextResponse.json(
+      { ok: false, error: error instanceof Error ? error.message : "Failed to archive failure" },
+      { status: 500 },
+    );
+  }
 
   return NextResponse.json({ ok: true, status: "failure_archived", today, instagram });
 }

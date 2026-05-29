@@ -217,6 +217,178 @@ textarea {
     opacity: 0;
     animation: reveal 600ms ease forwards;
   }
+
+  /* ---- Living atmosphere ------------------------------------------------ */
+  .ambient-canvas {
+    opacity: 0.9;
+    mix-blend-mode: screen;
+  }
+
+  .ambient-city {
+    position: absolute;
+    left: -5%;
+    right: -5%;
+    bottom: 0;
+    height: 42%;
+    background:
+      repeating-linear-gradient(90deg, transparent 0 18px, rgba(255, 196, 130, 0.05) 18px 19px, transparent 19px 46px),
+      linear-gradient(180deg, transparent, rgba(8, 10, 16, 0.5) 38%, rgba(4, 5, 8, 0.9));
+    -webkit-mask-image: linear-gradient(180deg, transparent, #000 60%);
+    mask-image: linear-gradient(180deg, transparent, #000 60%);
+    filter: blur(2px);
+    opacity: 0.6;
+  }
+
+  .ambient-bokeh {
+    position: absolute;
+    border-radius: 9999px;
+    filter: blur(60px);
+    opacity: 0.5;
+    will-change: transform, opacity;
+  }
+  .ambient-bokeh-1 {
+    left: 12%;
+    bottom: 8%;
+    width: 22rem;
+    height: 22rem;
+    background: radial-gradient(circle, rgba(255, 120, 90, 0.16), transparent 68%);
+    animation: bokeh-drift 26s ease-in-out infinite alternate;
+  }
+  .ambient-bokeh-2 {
+    right: 8%;
+    bottom: 16%;
+    width: 26rem;
+    height: 26rem;
+    background: radial-gradient(circle, rgba(90, 150, 255, 0.13), transparent 68%);
+    animation: bokeh-drift 32s ease-in-out infinite alternate-reverse;
+  }
+  .ambient-bokeh-3 {
+    left: 46%;
+    top: 6%;
+    width: 18rem;
+    height: 18rem;
+    background: radial-gradient(circle, rgba(245, 165, 36, 0.1), transparent 70%);
+    animation: bokeh-drift 38s ease-in-out infinite alternate;
+  }
+
+  .ambient-flash {
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle at 70% 30%, rgba(150, 180, 255, 0.06), transparent 60%);
+    opacity: 0;
+    animation: ambient-flash 17s ease-in-out infinite;
+  }
+
+  .ambient-fog {
+    position: absolute;
+    inset: -10%;
+    background:
+      radial-gradient(40% 30% at 30% 70%, rgba(120, 130, 150, 0.05), transparent 70%),
+      radial-gradient(50% 40% at 75% 40%, rgba(90, 110, 140, 0.045), transparent 72%);
+    filter: blur(30px);
+    animation: fog-drift 40s ease-in-out infinite alternate;
+  }
+
+  .ambient-grid {
+    position: absolute;
+    inset: 0;
+    background:
+      linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.014) 1px, transparent 1px);
+    background-size: 70px 70px;
+    opacity: 0.3;
+    -webkit-mask-image: radial-gradient(circle at 50% 40%, #000, transparent 80%);
+    mask-image: radial-gradient(circle at 50% 40%, #000, transparent 80%);
+  }
+
+  .ambient-vignette {
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle at 50% 38%, transparent 50%, rgba(2, 3, 5, 0.6));
+  }
+
+  /* ---- Cinematic boot --------------------------------------------------- */
+  .boot-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 70;
+    display: grid;
+    place-items: center;
+    background: radial-gradient(circle at 50% 60%, #0a0b10, #040406 70%);
+    opacity: 1;
+    transition: opacity 820ms ease, filter 820ms ease;
+  }
+  .boot-overlay-exit {
+    opacity: 0;
+    filter: blur(8px);
+    pointer-events: none;
+  }
+  .boot-atmosphere {
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(28rem 20rem at 30% 80%, rgba(255, 120, 90, 0.1), transparent 70%),
+      radial-gradient(30rem 22rem at 72% 30%, rgba(90, 150, 255, 0.09), transparent 72%);
+    filter: blur(8px);
+    opacity: 0.8;
+  }
+  .boot-core {
+    position: relative;
+    width: min(560px, calc(100vw - 40px));
+    text-align: center;
+    animation: boot-core-in 900ms ease both;
+  }
+  .boot-eyebrow {
+    color: var(--red);
+    font-size: 0.72rem;
+    letter-spacing: 0.34em;
+    text-transform: uppercase;
+    opacity: 0.85;
+  }
+  .boot-logo {
+    margin: 0.7rem 0 0;
+    font-size: clamp(2.4rem, 8vw, 4.4rem);
+    font-weight: 700;
+    letter-spacing: -0.04em;
+    color: var(--text);
+    text-shadow: 0 0 38px rgba(255, 59, 48, 0.28);
+    animation: boot-logo-in 1200ms ease both;
+  }
+  .boot-core-full .boot-logo {
+    animation-duration: 1700ms;
+  }
+  .boot-logo-dash {
+    color: var(--red);
+  }
+  .boot-message {
+    margin-top: 0.9rem;
+    min-height: 1.2em;
+    font-size: 0.8rem;
+    letter-spacing: 0.22em;
+    color: var(--muted);
+    animation: boot-msg-in 500ms ease both;
+  }
+  .boot-progress {
+    margin: 1.4rem auto 0;
+    height: 2px;
+    width: 100%;
+    background: rgba(232, 225, 212, 0.1);
+    overflow: hidden;
+  }
+  .boot-progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, rgba(255, 59, 48, 0.5), var(--red));
+    box-shadow: 0 0 14px rgba(255, 59, 48, 0.5);
+    transition: width 220ms ease;
+  }
+  .boot-readout {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 0.6rem;
+    font-size: 0.66rem;
+    letter-spacing: 0.24em;
+    color: var(--faint);
+  }
 }
 
 @keyframes horizontal-scan {
@@ -237,6 +409,38 @@ textarea {
 @keyframes ambient-drift {
   0% { transform: translate3d(-2%, -1%, 0) rotate(0deg); opacity: 0.38; }
   100% { transform: translate3d(2%, 1%, 0) rotate(6deg); opacity: 0.62; }
+}
+
+@keyframes bokeh-drift {
+  0% { transform: translate3d(-3%, 2%, 0) scale(1); opacity: 0.4; }
+  100% { transform: translate3d(4%, -3%, 0) scale(1.12); opacity: 0.62; }
+}
+
+@keyframes fog-drift {
+  0% { transform: translate3d(-2%, 0, 0); }
+  100% { transform: translate3d(3%, -2%, 0); }
+}
+
+@keyframes ambient-flash {
+  0%, 92%, 100% { opacity: 0; }
+  94% { opacity: 0.5; }
+  96% { opacity: 0.12; }
+  98% { opacity: 0.4; }
+}
+
+@keyframes boot-core-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes boot-logo-in {
+  0% { opacity: 0; letter-spacing: 0.3em; filter: blur(10px); transform: scale(0.98); }
+  100% { opacity: 1; letter-spacing: -0.04em; filter: blur(0); transform: scale(1); }
+}
+
+@keyframes boot-msg-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 0.9; transform: translateY(0); }
 }
 
 @media (prefers-reduced-motion: reduce) {

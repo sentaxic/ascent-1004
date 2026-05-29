@@ -10,14 +10,14 @@ import { ActionCard } from "@/components/ui/action-card";
 import { AnalyticsChart } from "@/components/ui/mini-chart";
 import { PageHero } from "@/components/ui/page-hero";
 import { SectionHeading } from "@/components/ui/section-heading";
-import { hasSupabaseEnv } from "@/lib/config";
+import { hasAppwriteAdminEnv } from "@/lib/config";
 import { getCurrentProfile, getDashboardSnapshot, getPosts } from "@/lib/data";
 import { padDay } from "@/lib/utils";
 
 export default async function AdminPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const [params, profile, snapshot, allPosts] = await Promise.all([searchParams, getCurrentProfile(), getDashboardSnapshot(), getPosts()]);
 
-  if (hasSupabaseEnv() && profile?.role !== "admin") notFound();
+  if (hasAppwriteAdminEnv() && profile?.role !== "admin") notFound();
 
   const nextDay = snapshot.latestPost ? snapshot.latestPost.dayNumber + 1 : 1;
 
@@ -32,7 +32,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
           { href: "#settings", label: "Edit site settings", variant: "secondary" },
         ]}
       >
-        {!hasSupabaseEnv() ? <span className="rounded-full border border-amber/35 bg-amber/10 px-4 py-2 text-xs text-amber">Demo mode: connect Supabase to enforce auth</span> : null}
+        {!hasAppwriteAdminEnv() ? <span className="rounded-full border border-amber/35 bg-amber/10 px-4 py-2 text-xs text-amber">Demo mode: connect Appwrite to enforce auth</span> : null}
       </PageHero>
 
       {params.error ? <p className="rounded-2xl border border-redline/35 bg-redline/[0.08] p-4 text-sm text-redline">{params.error}</p> : null}
@@ -79,21 +79,21 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
         </section>
       </div>
 
-      {hasSupabaseEnv() ? (
+      {hasAppwriteAdminEnv() ? (
         <div id="settings" className="scroll-mt-28">
           <MissionSettingsForm settings={snapshot.settings} />
         </div>
       ) : null}
 
       <div id="publish" className="scroll-mt-28">
-        {hasSupabaseEnv() ? <CreatePostForm nextDay={nextDay} /> : (
+        {hasAppwriteAdminEnv() ? <CreatePostForm nextDay={nextDay} /> : (
           <section className="terminal-panel rounded-[2rem] p-6 text-sm leading-6 text-muted">
-            Connect Supabase env vars to unlock real admin publishing. The form is intentionally hidden in demo mode so fake posts do not imply persistence.
+            Connect Appwrite env vars to unlock real admin publishing. The form is intentionally hidden in demo mode so fake posts do not imply persistence.
           </section>
         )}
       </div>
 
-      {hasSupabaseEnv() ? (
+      {hasAppwriteAdminEnv() ? (
         <div id="manage" className="scroll-mt-28">
           <PostManager posts={allPosts} failures={snapshot.failures} />
         </div>

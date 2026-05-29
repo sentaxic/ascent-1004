@@ -1,11 +1,13 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { ID, Permission, Role } from "node-appwrite";
 
-import { createAdminClient } from "@/lib/supabase/admin";
+import { appwriteConfig } from "@/lib/config";
+import { createAdminClient } from "@/lib/appwrite/server";
 
 export async function POST(request: NextRequest) {
-  const supabase = createAdminClient();
+  const admin = createAdminClient();
 
-  if (!supabase) {
+  if (!admin) {
     return NextResponse.json({ ok: true, mode: "demo" });
   }
 
@@ -15,13 +17,27 @@ export async function POST(request: NextRequest) {
   const userAgent = request.headers.get("user-agent");
   const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null;
 
-  const { error } = await supabase.from("visitor_events").insert({
-    path,
-    referrer,
-    user_agent: userAgent,
-    ip_hash: ip,
-  });
+  try {
+    await admin.databases.createDocument({
+      databaseId: appwriteConfig.databaseId,
+      collectionId: appwriteConfig.collections.visitorEvents,
+      documentId: ID.unique(),
+      data: {
+        path,
+        referrer,
+        userAgent,
+        ipHash: ip,
+        createdAt: new Date().toISOString(),
+      },
+      // Telemetry is private: only the admin label can read these documents.
+      permissions: [Permission.read(Role.label("admin"))],
+    });
+  } catch (error) {
+    return NextResponse.json(
+      { ok: false, error: error instanceof Error ? error.message : "Failed to record visit" },
+      { status: 500 },
+    );
+  }
 
-  if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
   return NextResponse.json({ ok: true });
 }

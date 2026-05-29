@@ -22,7 +22,7 @@ export function PostManager({ posts, failures }: { posts: Post[]; failures: Fail
 
       <details className="mt-5 rounded-2xl border border-redline/35 bg-redline/[0.06] p-4">
         <summary className="cursor-pointer text-sm font-semibold text-ash">Full zero reset</summary>
-        <p className="mt-3 text-xs leading-5 text-muted">Deletes posts, post media rows, comments, and failures. Your admin account, profile, mission settings, and Supabase project stay intact.</p>
+        <p className="mt-3 text-xs leading-5 text-muted">Deletes posts, post media rows, comments, and failures. Your admin account, profile, mission settings, and Appwrite project stay intact.</p>
         <form action={resetMissionAction} className="mt-4 grid gap-3 sm:grid-cols-[1fr_auto]">
           <input className="field rounded-2xl px-4 py-3 text-sm" name="confirmation" placeholder="Type RESET ASCENT" />
           <button className="button-danger rounded-2xl px-5 py-3 text-xs uppercase tracking-[0.16em]">Reset to zero</button>

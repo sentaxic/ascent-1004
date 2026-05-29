@@ -1,81 +1,77 @@
 # ASCENT-1004
 
-Dark, terminal-inspired public self-improvement and progress-tracking platform for a multi-year MIT mission arc.
+Dark, terminal-inspired public progress-tracking platform documenting a
+multi-year MIT mission arc — physics, discipline, fitness, and daily logs.
 
 ## Stack
 
-- Next.js App Router
+- Next.js (App Router) + TypeScript
 - TailwindCSS
-- Supabase Auth, Postgres, Storage, and RLS
-- Vercel deployment and scheduled cron route
+- **Appwrite** — Auth, Database, Storage (server SDK: `node-appwrite`)
+- Framer Motion + GSAP for motion
+- Vercel deployment + scheduled cron route
 
-## What It Includes
+## What it includes
 
-- Live countdown to the MIT application horizon, defaulting to January 5, 2029
-- Pi Day 2029 decision horizon tracker
-- Public mission dashboard with streak, study hours, gym consistency, physics progress, and latest post
-- Timeline/archive with `DAY ###` identifiers
-- Failure Archive for missed days and broken streaks
-- Supabase auth with encrypted password handling through Supabase Auth
-- Role-based permissions: only `admin` can publish posts and manage official post media
-- User profiles with avatar, banner, bio, social links, join date, and comment history
-- Comments for authenticated users
-- Admin dashboard with analytics, streak metrics, publishing, uploads, and automation status
-- Missed-day cron endpoint that can trigger Instagram via webhook or Graph API media publishing
+- Live countdown to the MIT application horizon (defaults to Jan 5, 2029) and a Pi Day 2029 decision tracker
+- Public mission dashboard: streak, study hours, gym consistency, physics progress, latest log
+- Timeline/archive with `DAY ###` identifiers and a Failure Archive for missed days
+- Appwrite Auth with email verification, recovery, rate limiting, and **production-safe redirects**
+- Role-based access: only the `admin` (`Micheal`) can publish posts and manage official media
+- Multi-section CMS (Mission Log, Physics Research, Devlog, Gym Journal, Philosophical Notes …)
+- User profiles (avatar, banner, bio, social links) and authenticated comments
+- Missed-day cron that records failures and can post to Instagram via webhook or Graph API
 
-## Local Setup
+## Local setup
 
 ```bash
 npm install
-cp .env.example .env.local
+cp .env.example .env.local   # then fill the Appwrite values
 npm run dev
 ```
 
-Open `http://localhost:3000`.
+Open `http://localhost:3000`. Without Appwrite env vars the site runs in demo
+mode using seed mission data (no auth, no persistence).
 
-Without Supabase env vars, the site runs in demo mode using seed mission data.
+## Backend setup (Appwrite)
 
-## Supabase Setup
+Full step-by-step — including the fix for verification emails redirecting to
+localhost — is in **[docs/APPWRITE_SETUP.md](docs/APPWRITE_SETUP.md)**. Short version:
 
-1. Create a Supabase project.
-2. Run `supabase/schema.sql` in the Supabase SQL editor.
-3. Copy the Supabase project URL and anon key into `.env.local`.
-4. Copy the service role key into `.env.local` for analytics and cron automation routes.
-5. Create the real Micheal user in Supabase Auth.
-6. Promote that user manually in SQL:
+1. Create an Appwrite project; copy the endpoint + project ID into `.env.local`.
+2. Create a server API key (Database + Storage + Auth scopes); set `APPWRITE_API_KEY`.
+3. Provision the database, collections, buckets, and seed data:
+   ```bash
+   npm run setup:appwrite          # add -- --no-seed for schema only
+   ```
+4. Register your domains as **Web platforms** in Appwrite (`ascent-1004.vercel.app`
+   and `localhost`) so auth redirects resolve correctly.
+5. Sign up at `/auth/signup` as `Micheal` with the email in `APPWRITE_ADMIN_EMAIL`
+   — that account is auto-assigned the `admin` role.
 
-```sql
-update public.profiles
-set username = 'Micheal', display_name = 'Micheal', role = 'admin'
-where id = '<AUTH_USER_UUID>';
-```
+## Missed-day automation
 
-Public signup intentionally cannot claim `Micheal`; this prevents username-based admin impersonation.
+The cron route is `GET /api/cron/missed-day`, scheduled in `vercel.json` for
+16:30 UTC (= 22:00 Asia/Kolkata). Protect it with `CRON_SECRET`
+(`Authorization: Bearer <secret>`). Instagram posting is optional:
 
-## Instagram Missed-Day Automation
+- `INSTAGRAM_MISSED_DAY_WEBHOOK_URL` for Zapier/Make/custom automation, or
+- `INSTAGRAM_ACCOUNT_ID` + `INSTAGRAM_GRAPH_TOKEN` + `INSTAGRAM_FAILURE_IMAGE_URL` for Graph API.
 
-The cron route is `GET /api/cron/missed-day`.
-
-Vercel cron is configured in `vercel.json` for 16:30 UTC, which is 22:00 Asia/Kolkata. Adjust this if your cutoff changes.
-
-Instagram Graph API does not support text-only public posts. Configure one of these:
-
-- `INSTAGRAM_MISSED_DAY_WEBHOOK_URL` for Zapier/Make/custom automation
-- `INSTAGRAM_ACCOUNT_ID`, `INSTAGRAM_GRAPH_TOKEN`, and `INSTAGRAM_FAILURE_IMAGE_URL` for Graph API media publishing
-
-Protect the endpoint with `CRON_SECRET`; send it as `Authorization: Bearer <secret>`.
+Leave them blank to simply record failures in the archive.
 
 ## Deployment
 
-1. Push this folder to GitHub.
-2. Import the repository in Vercel.
-3. Add all `.env.example` variables in Vercel Project Settings.
-4. Deploy.
-5. Confirm `/api/cron/missed-day` appears under Vercel Cron Jobs.
+1. Push to GitHub and import the repo in Vercel.
+2. Add all `.env.example` variables in Vercel → Settings → Environment Variables
+   (Production + Preview), then redeploy.
+3. Confirm `/api/cron/missed-day` appears under Vercel Cron Jobs.
 
-## Security Notes
+## Security notes
 
-- Passwords are handled by Supabase Auth, not stored manually by the app.
-- Row Level Security prevents non-admin users from publishing posts.
-- Profile updates cannot change `role`; role changes require service-role SQL/admin operations.
-- Public users can comment and customize profiles, but cannot publish mission posts.
+- Passwords are handled by Appwrite Auth; the app never stores them.
+- Publishing/editing/deleting posts is restricted to the `admin` role; the
+  signup form blocks anyone else from claiming the `Micheal` username.
+- Privileged writes run server-side through the Appwrite API key (never exposed
+  to the client). The `APPWRITE_API_KEY` is server-only — never `NEXT_PUBLIC_`.
+- Visitor telemetry is admin-read-only.

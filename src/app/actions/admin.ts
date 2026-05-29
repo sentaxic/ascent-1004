@@ -2,9 +2,13 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { ID, Permission, Query, Role, type Databases } from "node-appwrite";
+import { InputFile } from "node-appwrite/file";
 
-import { createAdminClient } from "@/lib/supabase/admin";
-import { createClient } from "@/lib/supabase/server";
+import { appwriteConfig } from "@/lib/config";
+import { appwriteMessage } from "@/lib/appwrite/errors";
+import { appwriteFileView, createAdminClient } from "@/lib/appwrite/server";
+import { getCurrentProfile } from "@/lib/data";
 import { slugify } from "@/lib/utils";
 
 function getString(formData: FormData, key: string) {
@@ -18,44 +22,69 @@ function getNumber(formData: FormData, key: string, fallback = 0) {
 }
 
 async function assertAdminSession() {
-  const supabase = await createClient();
-  if (!supabase) redirect("/auth/login?error=Supabase%20is%20not%20configured");
+  const admin = createAdminClient();
+  if (!admin) redirect("/auth/login?error=Appwrite%20is%20not%20configured");
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const profile = await getCurrentProfile();
+  if (!profile) redirect("/auth/login");
+  if (profile.role !== "admin") redirect("/?error=Admin%20permission%20required");
 
-  if (!user) redirect("/auth/login");
+  return { admin, profile };
+}
 
-  const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
-  if (profile?.role !== "admin") redirect("/?error=Admin%20permission%20required");
+function revalidateMission() {
+  revalidatePath("/");
+  revalidatePath("/admin");
+  revalidatePath("/timeline");
+  revalidatePath("/failure-archive");
+  revalidatePath("/sections");
+}
 
-  return { supabase, user };
+async function updateOrCreate(databases: Databases, collectionId: string, documentId: string, data: Record<string, unknown>, permissions?: string[]) {
+  try {
+    return await databases.updateDocument({ databaseId: appwriteConfig.databaseId, collectionId, documentId, data, permissions });
+  } catch {
+    return databases.createDocument({ databaseId: appwriteConfig.databaseId, collectionId, documentId, data, permissions });
+  }
 }
 
 function mediaKindFromType(type: string, url: string) {
-  if (type.startsWith("video/")) return "video";
+  if (type.startsWith("video/") || /\.(mp4|webm|mov)$/i.test(url)) return "video";
   if (type === "image/gif" || url.toLowerCase().endsWith(".gif")) return "gif";
-  if (type.startsWith("image/")) return "image";
+  if (type.startsWith("image/") || /\.(png|jpe?g|webp|avif)$/i.test(url)) return "image";
   return "embed";
 }
 
 async function uploadManagedPostMedia(file: File, postId: string, index: number) {
-  const { supabase } = await assertAdminSession();
+  const { admin } = await assertAdminSession();
   const extension = file.name.split(".").pop() || "bin";
-  const path = `${postId}/managed-${Date.now()}-${index}.${extension}`;
+  const fileId = ID.unique();
 
-  const { error } = await supabase.storage.from("post-media").upload(path, file, {
-    cacheControl: "31536000",
-    contentType: file.type,
+  await admin.storage.createFile({
+    bucketId: appwriteConfig.postMediaBucketId,
+    fileId,
+    file: InputFile.fromBuffer(file, `managed-${Date.now()}-${index}.${extension}`),
+    permissions: [Permission.read(Role.any()), Permission.update(Role.label("admin")), Permission.delete(Role.label("admin"))],
   });
 
-  if (error) throw new Error(error.message);
-
-  const { data } = supabase.storage.from("post-media").getPublicUrl(path);
-  return data.publicUrl;
+  return appwriteFileView(appwriteConfig.postMediaBucketId, fileId);
 }
 
+async function uploadSectionBanner(file: File, sectionId: string) {
+  const { admin } = await assertAdminSession();
+  if (!file.size) return "";
+  const extension = file.name.split(".").pop() || "png";
+  const fileId = ID.unique();
+
+  await admin.storage.createFile({
+    bucketId: appwriteConfig.postMediaBucketId,
+    fileId,
+    file: InputFile.fromBuffer(file, `section-${sectionId}-${Date.now()}.${extension}`),
+    permissions: [Permission.read(Role.any()), Permission.update(Role.label("admin")), Permission.delete(Role.label("admin"))],
+  });
+
+  return appwriteFileView(appwriteConfig.postMediaBucketId, fileId);
+}
 
 function assertValidDate(value: string, field: string) {
   if (!value || Number.isNaN(new Date(value).getTime())) {
@@ -65,122 +94,234 @@ function assertValidDate(value: string, field: string) {
 }
 
 export async function updateMissionSettingsAction(formData: FormData) {
-  const { supabase } = await assertAdminSession();
+  const { admin } = await assertAdminSession();
 
   const applicationDeadline = assertValidDate(getString(formData, "applicationDeadline"), "MIT deadline");
   const decisionHorizon = assertValidDate(getString(formData, "decisionHorizon"), "Pi Day horizon");
   const missionTimeZone = getString(formData, "missionTimeZone") || "Asia/Kolkata";
   const missedDayCutoffHour = Math.min(Math.max(Math.floor(getNumber(formData, "missedDayCutoffHour", 22)), 0), 23);
-  const countdownLabel = getString(formData, "countdownLabel");
-  const countdownDescription = getString(formData, "countdownDescription");
-  const operatorName = getString(formData, "operatorName");
-  const operatorTitle = getString(formData, "operatorTitle");
-  const operatorBio = getString(formData, "operatorBio");
-  const nextActionCopy = getString(formData, "nextActionCopy");
 
-  const { error } = await supabase.from("mission_settings").upsert({
-    id: true,
-    application_deadline: applicationDeadline,
-    decision_horizon: decisionHorizon,
-    mission_time_zone: missionTimeZone,
-    missed_day_cutoff_hour: missedDayCutoffHour,
-    countdown_label: countdownLabel,
-    countdown_description: countdownDescription,
-    operator_name: operatorName,
-    operator_title: operatorTitle,
-    operator_bio: operatorBio,
-    next_action_copy: nextActionCopy,
-  });
-
-  if (error) redirect(`/admin?error=${encodeURIComponent(error.message)}`);
+  try {
+    await updateOrCreate(admin.databases, appwriteConfig.collections.missionSettings, "singleton", {
+      applicationDeadline,
+      decisionHorizon,
+      missionTimeZone,
+      missedDayCutoffHour,
+      countdownLabel: getString(formData, "countdownLabel"),
+      countdownDescription: getString(formData, "countdownDescription"),
+      operatorName: getString(formData, "operatorName"),
+      operatorTitle: getString(formData, "operatorTitle"),
+      operatorBio: getString(formData, "operatorBio"),
+      nextActionCopy: getString(formData, "nextActionCopy"),
+      failureMessageTemplate: getString(formData, "failureMessageTemplate"),
+      instagramWebhookUrl: getString(formData, "instagramWebhookUrl"),
+      automationEnabled: formData.get("automationEnabled") === "on",
+    }, [Permission.read(Role.any()), Permission.update(Role.label("admin"))]);
+  } catch (error) {
+    redirect(`/admin?error=${encodeURIComponent(appwriteMessage(error))}`);
+  }
 
   revalidateMission();
   redirect("/admin?message=Mission%20settings%20updated");
 }
 
-function revalidateMission() {
-  revalidatePath("/");
-  revalidatePath("/admin");
-  revalidatePath("/timeline");
-  revalidatePath("/failure-archive");
+export async function createSectionAction(formData: FormData) {
+  const { admin } = await assertAdminSession();
+  const name = getString(formData, "name");
+  if (!name) redirect("/admin?error=Section%20name%20is%20required");
+
+  const sectionId = ID.unique();
+  const slug = slugify(getString(formData, "slug") || name);
+  const banner = formData.get("banner");
+  let bannerUrl = "";
+
+  try {
+    if (banner instanceof File && banner.size > 0) bannerUrl = await uploadSectionBanner(banner, sectionId);
+
+    await admin.databases.createDocument({
+      databaseId: appwriteConfig.databaseId,
+      collectionId: appwriteConfig.collections.sections,
+      documentId: sectionId,
+      data: {
+        name,
+        slug,
+        description: getString(formData, "description"),
+        icon: getString(formData, "icon") || name.slice(0, 1),
+        accentColor: getString(formData, "accentColor") || "#ff3b30",
+        theme: getString(formData, "theme") || "terminal",
+        bannerUrl,
+        layout: getString(formData, "layout") || "timeline",
+        visibility: getString(formData, "visibility") || "public",
+        commentsEnabled: formData.get("commentsEnabled") === "on",
+        featured: formData.get("featured") === "on",
+        archived: false,
+        sortOrder: Math.floor(getNumber(formData, "sortOrder", 50)),
+        parentId: getString(formData, "parentId"),
+        moderatorIds: getString(formData, "moderatorIds").split(",").map((id) => id.trim()).filter(Boolean),
+      },
+      permissions: [Permission.read(Role.any()), Permission.update(Role.label("admin")), Permission.delete(Role.label("admin"))],
+    });
+  } catch (error) {
+    redirect(`/admin?error=${encodeURIComponent(appwriteMessage(error))}`);
+  }
+
+  revalidateMission();
+  redirect("/admin?message=Section%20created");
+}
+
+export async function updateSectionAction(formData: FormData) {
+  const { admin } = await assertAdminSession();
+  const sectionId = getString(formData, "sectionId");
+  const name = getString(formData, "name");
+  if (!sectionId || !name) redirect("/admin?error=Section%20id%20and%20name%20are%20required");
+
+  const banner = formData.get("banner");
+  const data: Record<string, unknown> = {
+    name,
+    slug: slugify(getString(formData, "slug") || name),
+    description: getString(formData, "description"),
+    icon: getString(formData, "icon") || name.slice(0, 1),
+    accentColor: getString(formData, "accentColor") || "#ff3b30",
+    theme: getString(formData, "theme") || "terminal",
+    layout: getString(formData, "layout") || "timeline",
+    visibility: getString(formData, "visibility") || "public",
+    commentsEnabled: formData.get("commentsEnabled") === "on",
+    featured: formData.get("featured") === "on",
+    archived: formData.get("archived") === "on",
+    sortOrder: Math.floor(getNumber(formData, "sortOrder", 50)),
+    parentId: getString(formData, "parentId"),
+    moderatorIds: getString(formData, "moderatorIds").split(",").map((id) => id.trim()).filter(Boolean),
+  };
+
+  try {
+    if (banner instanceof File && banner.size > 0) data.bannerUrl = await uploadSectionBanner(banner, sectionId);
+    await admin.databases.updateDocument({ databaseId: appwriteConfig.databaseId, collectionId: appwriteConfig.collections.sections, documentId: sectionId, data });
+  } catch (error) {
+    redirect(`/admin?error=${encodeURIComponent(appwriteMessage(error))}`);
+  }
+
+  revalidateMission();
+  redirect("/admin?message=Section%20updated");
+}
+
+export async function duplicateSectionAction(formData: FormData) {
+  const { admin } = await assertAdminSession();
+  const sectionId = getString(formData, "sectionId");
+  if (!sectionId) redirect("/admin?error=Missing%20section%20id");
+
+  try {
+    const source = await admin.databases.getDocument({ databaseId: appwriteConfig.databaseId, collectionId: appwriteConfig.collections.sections, documentId: sectionId }) as Record<string, unknown>;
+    const name = `${String(source.name ?? "Section")} Copy`;
+    await admin.databases.createDocument({
+      databaseId: appwriteConfig.databaseId,
+      collectionId: appwriteConfig.collections.sections,
+      documentId: ID.unique(),
+      data: {
+        ...source,
+        name,
+        slug: slugify(name),
+        archived: false,
+        sortOrder: Number(source.sortOrder ?? 50) + 1,
+      },
+      permissions: [Permission.read(Role.any()), Permission.update(Role.label("admin")), Permission.delete(Role.label("admin"))],
+    });
+  } catch (error) {
+    redirect(`/admin?error=${encodeURIComponent(appwriteMessage(error))}`);
+  }
+
+  revalidateMission();
+  redirect("/admin?message=Section%20duplicated");
+}
+
+export async function archiveSectionAction(formData: FormData) {
+  const { admin } = await assertAdminSession();
+  const sectionId = getString(formData, "sectionId");
+  if (!sectionId) redirect("/admin?error=Missing%20section%20id");
+
+  try {
+    await admin.databases.updateDocument({ databaseId: appwriteConfig.databaseId, collectionId: appwriteConfig.collections.sections, documentId: sectionId, data: { archived: true } });
+  } catch (error) {
+    redirect(`/admin?error=${encodeURIComponent(appwriteMessage(error))}`);
+  }
+
+  revalidateMission();
+  redirect("/admin?message=Section%20archived");
+}
+
+export async function deleteSectionAction(formData: FormData) {
+  const { admin } = await assertAdminSession();
+  const sectionId = getString(formData, "sectionId");
+  const confirmation = getString(formData, "confirmation");
+  if (confirmation !== "DELETE SECTION") redirect("/admin?error=Type%20DELETE%20SECTION%20to%20confirm");
+
+  try {
+    await admin.databases.deleteDocument({ databaseId: appwriteConfig.databaseId, collectionId: appwriteConfig.collections.sections, documentId: sectionId });
+  } catch (error) {
+    redirect(`/admin?error=${encodeURIComponent(appwriteMessage(error))}`);
+  }
+
+  revalidateMission();
+  redirect("/admin?message=Section%20deleted");
 }
 
 export async function updatePostAction(formData: FormData) {
-  const { supabase } = await assertAdminSession();
+  const { admin } = await assertAdminSession();
 
   const postId = getString(formData, "postId");
   const originalSlug = getString(formData, "originalSlug");
   const title = getString(formData, "title");
   const content = getString(formData, "content");
-  const excerpt = getString(formData, "excerpt") || content.slice(0, 180);
   const dayNumber = Math.max(1, Math.floor(getNumber(formData, "dayNumber", 1)));
-  const streakAfterPost = Math.max(0, Math.floor(getNumber(formData, "streakAfterPost", dayNumber)));
-  const studyHours = Math.max(0, getNumber(formData, "studyHours", 0));
-  const physicsProgress = Math.min(Math.max(getNumber(formData, "physicsProgress", 0), 0), 100);
-  const gymComplete = formData.get("gymComplete") === "on";
-  const missionDate = getString(formData, "missionDate") || new Date().toISOString().slice(0, 10);
-  const status = getString(formData, "status") === "draft" ? "draft" : "published";
   const slug = getString(formData, "slug") || slugify(`day-${String(dayNumber).padStart(3, "0")}-${title}`);
-  const tags = getString(formData, "tags")
-    .split(",")
-    .map((tag) => tag.trim())
-    .filter(Boolean)
-    .slice(0, 10);
-  const mediaUrls = getString(formData, "mediaUrls")
-    .split("\n")
-    .map((url) => url.trim())
-    .filter(Boolean);
-  const files = formData.getAll("mediaFiles").filter((file): file is File => file instanceof File && file.size > 0);
 
   if (!postId || !title || !content) redirect("/admin?error=Post%20id,%20title,%20and%20content%20are%20required");
 
-  const { error } = await supabase
-    .from("posts")
-    .update({
-      day_number: dayNumber,
-      slug,
-      title,
-      excerpt,
-      content,
-      mission_date: missionDate,
-      tags,
-      study_hours: studyHours,
-      gym_complete: gymComplete,
-      physics_progress: physicsProgress,
-      streak_after_post: streakAfterPost,
-      status,
-    })
-    .eq("id", postId);
+  const mediaUrls = getString(formData, "mediaUrls").split("\n").map((url) => url.trim()).filter(Boolean);
+  const files = formData.getAll("mediaFiles").filter((file): file is File => file instanceof File && file.size > 0);
 
-  if (error) redirect(`/admin?error=${encodeURIComponent(error.message)}`);
-
-  const mediaRows = [];
-  for (const [index, url] of mediaUrls.entries()) {
-    mediaRows.push({
-      post_id: postId,
-      kind: mediaKindFromType("", url),
-      url,
-      alt: `${title} media ${index + 1}`,
-      sort_order: index,
+  try {
+    await admin.databases.updateDocument({
+      databaseId: appwriteConfig.databaseId,
+      collectionId: appwriteConfig.collections.posts,
+      documentId: postId,
+      data: {
+        sectionId: getString(formData, "sectionId"),
+        sectionSlug: getString(formData, "sectionSlug"),
+        sectionName: getString(formData, "sectionName"),
+        dayNumber,
+        slug,
+        title,
+        excerpt: getString(formData, "excerpt") || content.slice(0, 220),
+        content,
+        missionDate: getString(formData, "missionDate") || new Date().toISOString().slice(0, 10),
+        objective: getString(formData, "objective"),
+        failures: getString(formData, "failures"),
+        lessons: getString(formData, "lessons"),
+        tags: getString(formData, "tags").split(",").map((tag) => tag.trim()).filter(Boolean).slice(0, 16),
+        studyHours: Math.max(0, getNumber(formData, "studyHours", 0)),
+        weightKg: Math.max(0, getNumber(formData, "weightKg", 0)),
+        codingProgress: Math.min(Math.max(getNumber(formData, "codingProgress", 0), 0), 100),
+        physicsProgress: Math.min(Math.max(getNumber(formData, "physicsProgress", 0), 0), 100),
+        streakAfterPost: Math.max(0, Math.floor(getNumber(formData, "streakAfterPost", dayNumber))),
+        gymComplete: formData.get("gymComplete") === "on",
+        status: getString(formData, "status") === "draft" ? "draft" : getString(formData, "status") === "archived" ? "archived" : "published",
+        featured: formData.get("featured") === "on",
+        pinned: formData.get("pinned") === "on",
+      },
     });
-  }
 
-  for (const [index, file] of files.entries()) {
-    const url = await uploadManagedPostMedia(file, postId, index);
-    mediaRows.push({
-      post_id: postId,
-      kind: mediaKindFromType(file.type, url),
-      url,
-      alt: file.name,
-      sort_order: mediaRows.length,
-    });
-  }
+    await admin.databases.deleteDocuments({ databaseId: appwriteConfig.databaseId, collectionId: appwriteConfig.collections.postMedia, queries: [Query.equal("postId", postId)] });
 
-  const { error: mediaDeleteError } = await supabase.from("post_media").delete().eq("post_id", postId);
-  if (mediaDeleteError) redirect(`/admin?error=${encodeURIComponent(mediaDeleteError.message)}`);
-  if (mediaRows.length) {
-    const { error: mediaInsertError } = await supabase.from("post_media").insert(mediaRows);
-    if (mediaInsertError) redirect(`/admin?error=${encodeURIComponent(mediaInsertError.message)}`);
+    const rows = [];
+    for (const [index, url] of mediaUrls.entries()) rows.push({ postId, kind: mediaKindFromType("", url), url, alt: `${title} media ${index + 1}`, width: 0, height: 0, orientation: "landscape", sortOrder: index });
+    for (const [index, file] of files.entries()) {
+      const url = await uploadManagedPostMedia(file, postId, index);
+      rows.push({ postId, kind: mediaKindFromType(file.type, url), url, alt: file.name, width: 0, height: 0, orientation: "landscape", sortOrder: rows.length });
+    }
+
+    await Promise.all(rows.map((row) => admin.databases.createDocument({ databaseId: appwriteConfig.databaseId, collectionId: appwriteConfig.collections.postMedia, documentId: ID.unique(), data: row, permissions: [Permission.read(Role.any()), Permission.update(Role.label("admin")), Permission.delete(Role.label("admin"))] })));
+  } catch (error) {
+    redirect(`/admin?error=${encodeURIComponent(appwriteMessage(error))}`);
   }
 
   revalidateMission();
@@ -190,42 +331,45 @@ export async function updatePostAction(formData: FormData) {
 }
 
 export async function deletePostAction(formData: FormData) {
-  const { supabase } = await assertAdminSession();
+  const { admin } = await assertAdminSession();
   const postId = getString(formData, "postId");
-
   if (!postId) redirect("/admin?error=Missing%20post%20id");
 
-  const { error } = await supabase.from("posts").delete().eq("id", postId);
-  if (error) redirect(`/admin?error=${encodeURIComponent(error.message)}`);
+  try {
+    await admin.databases.deleteDocument({ databaseId: appwriteConfig.databaseId, collectionId: appwriteConfig.collections.posts, documentId: postId });
+    await admin.databases.deleteDocuments({ databaseId: appwriteConfig.databaseId, collectionId: appwriteConfig.collections.postMedia, queries: [Query.equal("postId", postId)] });
+    await admin.databases.deleteDocuments({ databaseId: appwriteConfig.databaseId, collectionId: appwriteConfig.collections.comments, queries: [Query.equal("postId", postId)] });
+  } catch (error) {
+    redirect(`/admin?error=${encodeURIComponent(appwriteMessage(error))}`);
+  }
 
   revalidateMission();
   redirect("/admin?message=Post%20deleted");
 }
 
 export async function clearFailuresAction() {
-  await assertAdminSession();
-  const admin = createAdminClient();
-  if (!admin) redirect("/admin?error=Service%20role%20key%20is%20required%20to%20clear%20failures");
-
-  const { error } = await admin.from("failure_events").delete().neq("id", "00000000-0000-0000-0000-000000000000");
-  if (error) redirect(`/admin?error=${encodeURIComponent(error.message)}`);
+  const { admin } = await assertAdminSession();
+  try {
+    await admin.databases.deleteDocuments({ databaseId: appwriteConfig.databaseId, collectionId: appwriteConfig.collections.failureEvents });
+  } catch (error) {
+    redirect(`/admin?error=${encodeURIComponent(appwriteMessage(error))}`);
+  }
 
   revalidateMission();
   redirect("/admin?message=Failure%20archive%20cleared");
 }
 
 export async function resetMissionAction(formData: FormData) {
-  await assertAdminSession();
+  const { admin } = await assertAdminSession();
   const confirmation = getString(formData, "confirmation");
   if (confirmation !== "RESET ASCENT") redirect("/admin?error=Type%20RESET%20ASCENT%20to%20confirm");
 
-  const admin = createAdminClient();
-  if (!admin) redirect("/admin?error=Service%20role%20key%20is%20required%20for%20mission%20reset");
-
-  const tables = ["comments", "post_media", "posts", "failure_events"];
-  for (const table of tables) {
-    const { error } = await admin.from(table).delete().neq("id", "00000000-0000-0000-0000-000000000000");
-    if (error) redirect(`/admin?error=${encodeURIComponent(`${table}: ${error.message}`)}`);
+  try {
+    for (const collectionId of [appwriteConfig.collections.comments, appwriteConfig.collections.postMedia, appwriteConfig.collections.posts, appwriteConfig.collections.failureEvents]) {
+      await admin.databases.deleteDocuments({ databaseId: appwriteConfig.databaseId, collectionId });
+    }
+  } catch (error) {
+    redirect(`/admin?error=${encodeURIComponent(appwriteMessage(error))}`);
   }
 
   revalidateMission();

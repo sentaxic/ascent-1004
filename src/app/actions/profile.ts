@@ -2,41 +2,47 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { ID, Permission, Role } from "node-appwrite";
+import { InputFile } from "node-appwrite/file";
 
-import { createClient } from "@/lib/supabase/server";
+import { appwriteConfig } from "@/lib/config";
+import { appwriteMessage } from "@/lib/appwrite/errors";
+import { appwriteFilePreview, createAdminClient, createSessionClient } from "@/lib/appwrite/server";
 
 function getString(formData: FormData, key: string) {
   const value = formData.get(key);
   return typeof value === "string" ? value.trim() : "";
 }
 
+async function currentUserId() {
+  const session = await createSessionClient();
+  if (!session) return null;
+  const user = await session.account.get();
+  return user.$id;
+}
+
 async function uploadProfileFile(file: File, userId: string, type: "avatar" | "banner") {
-  const supabase = await createClient();
-  if (!supabase || file.size === 0) return null;
+  const admin = createAdminClient();
+  if (!admin || file.size === 0) return null;
 
   const extension = file.name.split(".").pop() || "png";
-  const path = `${userId}/${type}-${Date.now()}.${extension}`;
-  const { error } = await supabase.storage.from("profiles").upload(path, file, {
-    cacheControl: "3600",
-    upsert: true,
-    contentType: file.type,
+  const fileId = ID.unique();
+  await admin.storage.createFile({
+    bucketId: appwriteConfig.profileBucketId,
+    fileId,
+    file: InputFile.fromBuffer(file, `${type}-${Date.now()}.${extension}`),
+    permissions: [Permission.read(Role.any()), Permission.update(Role.user(userId)), Permission.delete(Role.user(userId))],
   });
 
-  if (error) throw new Error(error.message);
-
-  const { data } = supabase.storage.from("profiles").getPublicUrl(path);
-  return data.publicUrl;
+  return appwriteFilePreview(appwriteConfig.profileBucketId, fileId, type === "avatar" ? 512 : 1800);
 }
 
 export async function updateProfileAction(formData: FormData) {
-  const supabase = await createClient();
-  if (!supabase) redirect("/auth/login?error=Connect%20Supabase%20to%20edit%20profiles");
+  const admin = createAdminClient();
+  if (!admin) redirect("/auth/login?error=Connect%20Appwrite%20to%20edit%20profiles");
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) redirect("/auth/login");
+  const userId = await currentUserId();
+  if (!userId) redirect("/auth/login");
 
   const username = getString(formData, "username");
   const displayName = getString(formData, "displayName") || username;
@@ -54,26 +60,36 @@ export async function updateProfileAction(formData: FormData) {
       return { label: label.trim(), url: urlParts.join("|").trim() };
     })
     .filter((link) => link.label && link.url)
-    .slice(0, 5);
+    .slice(0, 8);
 
   let avatarUrl: string | null = null;
   let bannerUrl: string | null = null;
 
-  if (avatar instanceof File && avatar.size > 0) avatarUrl = await uploadProfileFile(avatar, user.id, "avatar");
-  if (banner instanceof File && banner.size > 0) bannerUrl = await uploadProfileFile(banner, user.id, "banner");
+  try {
+    if (avatar instanceof File && avatar.size > 0) avatarUrl = await uploadProfileFile(avatar, userId, "avatar");
+    if (banner instanceof File && banner.size > 0) bannerUrl = await uploadProfileFile(banner, userId, "banner");
 
-  const updates: Record<string, unknown> = {
-    username,
-    display_name: displayName,
-    bio,
-    social_links: socialLinks,
-  };
+    const updates: Record<string, unknown> = {
+      username,
+      usernameLower: username.toLowerCase(),
+      displayName,
+      bio,
+      socialLinksJson: JSON.stringify(socialLinks),
+      status: "online",
+    };
 
-  if (avatarUrl) updates.avatar_url = avatarUrl;
-  if (bannerUrl) updates.banner_url = bannerUrl;
+    if (avatarUrl) updates.avatarUrl = avatarUrl;
+    if (bannerUrl) updates.bannerUrl = bannerUrl;
 
-  const { error } = await supabase.from("profiles").update(updates).eq("id", user.id);
-  if (error) redirect(`/profiles/${username}?error=${encodeURIComponent(error.message)}`);
+    await admin.databases.updateDocument({
+      databaseId: appwriteConfig.databaseId,
+      collectionId: appwriteConfig.collections.profiles,
+      documentId: userId,
+      data: updates,
+    });
+  } catch (error) {
+    redirect(`/profiles/${username || userId}?error=${encodeURIComponent(appwriteMessage(error))}`);
+  }
 
   revalidatePath(`/profiles/${username}`);
   redirect(`/profiles/${username}`);

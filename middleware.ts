@@ -1,32 +1,12 @@
-import { createServerClient } from "@supabase/ssr";
-import { type NextRequest, NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 
-import { hasSupabaseEnv } from "@/lib/config";
-
-export async function middleware(request: NextRequest) {
-  if (!hasSupabaseEnv()) return NextResponse.next({ request });
-
-  let response = NextResponse.next({ request });
-
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return request.cookies.getAll();
-        },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
-          response = NextResponse.next({ request });
-          cookiesToSet.forEach(({ name, value, options }) => response.cookies.set(name, value, options));
-        },
-      },
-    },
-  );
-
-  await supabase.auth.getUser();
-  return response;
+// Appwrite sessions live in an httpOnly cookie (`a_session_<projectId>`) written
+// by the server actions in src/app/actions/auth.ts and validated per-request
+// inside server components/actions via createSessionClient(). There is no token
+// to refresh here, so middleware simply passes requests through. This stays as
+// the home for any future route-level gating.
+export function middleware(request: NextRequest) {
+  return NextResponse.next({ request });
 }
 
 export const config = {

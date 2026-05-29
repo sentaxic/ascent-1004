@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import { signInAction } from "@/app/actions/auth";
 import { AuthShell } from "@/components/auth/auth-shell";
 
@@ -13,11 +15,14 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
         </label>
         <label className="block space-y-2">
           <span className="mono-label">Password</span>
-          <input className="field rounded-2xl px-4 py-3" name="password" type="password" autoComplete="current-password" placeholder="••••••••" required />
+          <input className="field rounded-2xl px-4 py-3" name="password" type="password" autoComplete="current-password" placeholder="At least 8 characters" required />
         </label>
         <button className="button-primary w-full rounded-2xl px-4 py-3 text-sm uppercase tracking-[0.16em]">Authenticate</button>
       </form>
-      <p className="mt-4 text-xs leading-5 text-muted">Admin-only pages stay hidden unless your profile role is set to admin in Supabase.</p>
+      <div className="mt-4 flex flex-wrap justify-between gap-3 text-xs text-muted">
+        <span>Admin-only pages require the Appwrite profile role `admin`.</span>
+        <Link href="/auth/recover" className="text-redline">Forgot password?</Link>
+      </div>
     </AuthShell>
   );
 }

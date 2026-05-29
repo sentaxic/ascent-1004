@@ -11,7 +11,7 @@ export default async function SignupPage({ searchParams }: { searchParams: Promi
           <label className="block space-y-2">
             <span className="mono-label">Username</span>
             <input className="field rounded-2xl px-4 py-3" name="username" autoComplete="username" placeholder="observer_name" required />
-            <span className="input-help">The username Micheal is reserved for the operator account.</span>
+            <span className="input-help">The username Micheal is reserved unless the email matches `APPWRITE_ADMIN_EMAIL`.</span>
           </label>
           <label className="block space-y-2">
             <span className="mono-label">Display name</span>
