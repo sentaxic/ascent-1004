@@ -7,13 +7,28 @@
   --panel: #0a0a0a;
   --panel-2: #10100f;
   --line: #27231f;
-  --line-hot: rgba(255, 59, 48, 0.42);
+  --line-hot: rgb(var(--accent-rgb) / 0.42);
   --text: #e8e1d4;
   --muted: #90887c;
   --faint: #575047;
   --red: #ff3b30;
   --amber: #f5a524;
   --green: #80d68f;
+
+  /* ---- Live accent (rewritten by ThemeProvider per data-atmosphere) ------ */
+  /* Default = mission / red. --accent-rgb feeds tailwind's accent color +
+     all shadow/glow tokens; --accent-soft is a faint wash for backgrounds. */
+  --accent-rgb: 255 59 48;
+  --accent: rgb(var(--accent-rgb));
+  --accent-soft: rgb(var(--accent-rgb) / 0.12);
+  --accent-line: rgb(var(--accent-rgb) / 0.45);
+  /* Atmosphere tint — two soft radial pools the canvas + body glow read. */
+  --atmo-warm: 255 120 90;
+  --atmo-cool: 90 150 255;
+  --atmo-intensity: 1;
+
+  /* Focus mode dims motion + brightness globally; toggled on <html>. */
+  --focus-dim: 1;
 }
 
 * {
@@ -23,18 +38,26 @@
 html {
   background: var(--bg);
   scroll-behavior: smooth;
+  /* Live accent transitions smoothly when a section changes the theme. */
+  transition: background-color 600ms ease;
 }
 
 body {
   min-height: 100vh;
   margin: 0;
   background:
-    radial-gradient(circle at 18% -10%, rgba(255, 59, 48, 0.15), transparent 34rem),
+    radial-gradient(circle at 18% -10%, rgb(var(--accent-rgb) / 0.15), transparent 34rem),
     radial-gradient(circle at 90% 8%, rgba(245, 165, 36, 0.08), transparent 30rem),
     linear-gradient(180deg, #050505 0%, #090806 52%, #050505 100%);
   color: var(--text);
   font-family: var(--font-jetbrains), var(--font-ibm-plex), ui-monospace, SFMono-Regular, Menlo, monospace;
   overflow-x: hidden;
+  transition: filter 700ms ease;
+}
+
+/* Focus mode: calm the room — gently lower brightness/contrast. */
+html[data-focus="on"] body {
+  filter: brightness(0.86) saturate(0.92);
 }
 
 body::before {
@@ -67,7 +90,7 @@ body::after {
 }
 
 ::selection {
-  background: rgba(255, 59, 48, 0.35);
+  background: rgb(var(--accent-rgb) / 0.35);
   color: #fff8ee;
 }
 
@@ -88,6 +111,12 @@ textarea {
     margin-inline: auto;
   }
 
+  /* Wider editorial measure for full-bleed display moments. */
+  .container-wide {
+    width: min(1440px, calc(100vw - 32px));
+    margin-inline: auto;
+  }
+
   .terminal-panel {
     position: relative;
     border: 1px solid rgba(232, 225, 212, 0.12);
@@ -104,7 +133,7 @@ textarea {
     inset: 0;
     pointer-events: none;
     border-radius: inherit;
-    background: linear-gradient(135deg, rgba(255, 59, 48, 0.16), transparent 28%, transparent 70%, rgba(232, 225, 212, 0.04));
+    background: linear-gradient(135deg, rgb(var(--accent-rgb) / 0.16), transparent 28%, transparent 70%, rgba(232, 225, 212, 0.04));
     opacity: 0;
     transition: opacity 300ms ease;
   }
@@ -121,9 +150,78 @@ textarea {
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035);
   }
 
+  /* ---- Glassmorphism (nav + audio panel) -------------------------------- */
+  .glass {
+    position: relative;
+    border: 1px solid rgba(232, 225, 212, 0.1);
+    background: rgba(10, 10, 12, 0.55);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.07);
+    backdrop-filter: blur(22px) saturate(1.3);
+    -webkit-backdrop-filter: blur(22px) saturate(1.3);
+  }
+
+  .glass-accent-border::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    border-radius: inherit;
+    padding: 1px;
+    background: linear-gradient(120deg, rgb(var(--accent-rgb) / 0.5), transparent 40%, transparent 70%, rgb(var(--accent-rgb) / 0.25));
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    opacity: 0.7;
+  }
+
   .section-grid {
     display: grid;
     gap: 1rem;
+  }
+
+  /* ---- Editorial typography --------------------------------------------- */
+  /* The display family is the hero: oversized, tight, mono identity intact.  */
+  .display {
+    font-weight: 700;
+    line-height: 0.92;
+    letter-spacing: -0.06em;
+    color: var(--text);
+    text-wrap: balance;
+  }
+
+  .eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
+    color: var(--accent);
+    font-size: clamp(0.66rem, 0.62rem + 0.2vw, 0.78rem);
+    line-height: 1;
+    letter-spacing: 0.34em;
+    text-transform: uppercase;
+  }
+
+  .eyebrow::before {
+    content: "";
+    width: 1.6rem;
+    height: 1px;
+    background: currentColor;
+    opacity: 0.6;
+  }
+
+  .eyebrow-plain {
+    color: var(--accent);
+    font-size: clamp(0.66rem, 0.62rem + 0.2vw, 0.78rem);
+    line-height: 1;
+    letter-spacing: 0.34em;
+    text-transform: uppercase;
+  }
+
+  .lead {
+    max-width: 60ch;
+    color: var(--muted);
+    font-size: clamp(1rem, 0.94rem + 0.5vw, 1.3rem);
+    line-height: 1.55;
+    letter-spacing: -0.01em;
   }
 
   .mono-label {
@@ -133,17 +231,38 @@ textarea {
     text-transform: uppercase;
   }
 
+  /* ---- Hairline rules ---------------------------------------------------- */
+  .hairline {
+    height: 1px;
+    width: 100%;
+    background: linear-gradient(90deg, transparent, rgba(232, 225, 212, 0.18), transparent);
+    border: 0;
+  }
+
+  .hairline-accent {
+    height: 1px;
+    width: 100%;
+    background: linear-gradient(90deg, transparent, var(--accent-line), transparent);
+    border: 0;
+  }
+
+  .hairline-v {
+    width: 1px;
+    align-self: stretch;
+    background: linear-gradient(180deg, transparent, rgba(232, 225, 212, 0.16), transparent);
+  }
+
   .glow-link {
     border: 1px solid rgba(232, 225, 212, 0.14);
     background: rgba(232, 225, 212, 0.035);
-    transition: border-color 220ms ease, background 220ms ease, transform 220ms ease, box-shadow 220ms ease;
+    transition: border-color 220ms ease, background 220ms ease, transform 220ms ease, box-shadow 220ms ease, color 220ms ease;
   }
 
   .glow-link:hover {
     transform: translateY(-2px);
-    border-color: rgba(255, 59, 48, 0.52);
-    background: rgba(255, 59, 48, 0.08);
-    box-shadow: 0 0 30px rgba(255, 59, 48, 0.12);
+    border-color: var(--accent-line);
+    background: rgb(var(--accent-rgb) / 0.08);
+    box-shadow: 0 0 30px rgb(var(--accent-rgb) / 0.12);
   }
 
   .field {
@@ -156,22 +275,22 @@ textarea {
   }
 
   .field:focus {
-    border-color: rgba(255, 59, 48, 0.62);
-    box-shadow: 0 0 0 3px rgba(255, 59, 48, 0.11);
+    border-color: rgb(var(--accent-rgb) / 0.62);
+    box-shadow: 0 0 0 3px rgb(var(--accent-rgb) / 0.11);
     background: rgba(12, 10, 9, 0.95);
   }
 
   .button-primary {
-    border: 1px solid rgba(255, 59, 48, 0.62);
-    background: linear-gradient(180deg, rgba(255, 59, 48, 0.22), rgba(135, 21, 18, 0.32));
+    border: 1px solid rgb(var(--accent-rgb) / 0.62);
+    background: linear-gradient(180deg, rgb(var(--accent-rgb) / 0.22), rgb(var(--accent-rgb) / 0.08));
     color: #fff1e8;
     transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
   }
 
   .button-primary:hover {
     transform: translateY(-2px);
-    box-shadow: 0 0 34px rgba(255, 59, 48, 0.18);
-    border-color: rgba(255, 120, 112, 0.9);
+    box-shadow: 0 0 34px rgb(var(--accent-rgb) / 0.18);
+    border-color: rgb(var(--accent-rgb) / 0.9);
   }
 
   .button-secondary {
@@ -183,9 +302,9 @@ textarea {
 
   .button-secondary:hover {
     transform: translateY(-2px);
-    border-color: rgba(255, 59, 48, 0.45);
-    background: rgba(255, 59, 48, 0.075);
-    box-shadow: 0 0 28px rgba(255, 59, 48, 0.11);
+    border-color: var(--accent-line);
+    background: rgb(var(--accent-rgb) / 0.075);
+    box-shadow: 0 0 28px rgb(var(--accent-rgb) / 0.11);
   }
 
   .button-danger {
@@ -209,10 +328,12 @@ textarea {
 
   .mission-rail {
     background:
-      linear-gradient(90deg, rgba(255, 59, 48, 0.22), transparent 26%),
+      linear-gradient(90deg, rgb(var(--accent-rgb) / 0.22), transparent 26%),
       linear-gradient(180deg, rgba(232, 225, 212, 0.05), rgba(232, 225, 212, 0.015));
   }
 
+  /* Legacy CSS reveal — kept for server-rendered first paint. The <Reveal>
+     component supersedes it for richer scroll-driven motion. */
   .reveal {
     opacity: 0;
     animation: reveal 600ms ease forwards;
@@ -220,23 +341,25 @@ textarea {
 
   /* ---- Living atmosphere ------------------------------------------------ */
   .ambient-canvas {
-    opacity: 0.9;
+    opacity: 0.92;
     mix-blend-mode: screen;
   }
 
+  /* Distant blurred cityscape silhouette (CSS depth layer behind the canvas). */
   .ambient-city {
     position: absolute;
-    left: -5%;
-    right: -5%;
+    left: -6%;
+    right: -6%;
     bottom: 0;
-    height: 42%;
+    height: 46%;
     background:
-      repeating-linear-gradient(90deg, transparent 0 18px, rgba(255, 196, 130, 0.05) 18px 19px, transparent 19px 46px),
+      repeating-linear-gradient(90deg, transparent 0 22px, rgba(255, 196, 130, 0.045) 22px 23px, transparent 23px 54px),
+      repeating-linear-gradient(90deg, transparent 0 60px, rgba(120, 150, 210, 0.03) 60px 61px, transparent 61px 130px),
       linear-gradient(180deg, transparent, rgba(8, 10, 16, 0.5) 38%, rgba(4, 5, 8, 0.9));
     -webkit-mask-image: linear-gradient(180deg, transparent, #000 60%);
     mask-image: linear-gradient(180deg, transparent, #000 60%);
     filter: blur(2px);
-    opacity: 0.6;
+    opacity: 0.55;
   }
 
   .ambient-bokeh {
@@ -251,7 +374,7 @@ textarea {
     bottom: 8%;
     width: 22rem;
     height: 22rem;
-    background: radial-gradient(circle, rgba(255, 120, 90, 0.16), transparent 68%);
+    background: radial-gradient(circle, rgb(var(--atmo-warm) / 0.16), transparent 68%);
     animation: bokeh-drift 26s ease-in-out infinite alternate;
   }
   .ambient-bokeh-2 {
@@ -259,7 +382,7 @@ textarea {
     bottom: 16%;
     width: 26rem;
     height: 26rem;
-    background: radial-gradient(circle, rgba(90, 150, 255, 0.13), transparent 68%);
+    background: radial-gradient(circle, rgb(var(--atmo-cool) / 0.13), transparent 68%);
     animation: bokeh-drift 32s ease-in-out infinite alternate-reverse;
   }
   .ambient-bokeh-3 {
@@ -267,8 +390,34 @@ textarea {
     top: 6%;
     width: 18rem;
     height: 18rem;
-    background: radial-gradient(circle, rgba(245, 165, 36, 0.1), transparent 70%);
+    background: radial-gradient(circle, rgb(var(--accent-rgb) / 0.1), transparent 70%);
     animation: bokeh-drift 38s ease-in-out infinite alternate;
+  }
+
+  /* Faint warm desk/monitor room-glow (bottom) + cool monitor glow (center). */
+  .ambient-room-glow {
+    position: absolute;
+    left: 50%;
+    bottom: -12%;
+    width: 120%;
+    height: 60%;
+    transform: translateX(-50%);
+    background: radial-gradient(60% 70% at 50% 100%, rgb(var(--atmo-warm) / 0.07), transparent 72%);
+    filter: blur(20px);
+    opacity: calc(0.8 * var(--atmo-intensity));
+    animation: room-breathe 14s ease-in-out infinite;
+  }
+  .ambient-monitor-glow {
+    position: absolute;
+    left: 50%;
+    top: 28%;
+    width: 70%;
+    height: 50%;
+    transform: translateX(-50%);
+    background: radial-gradient(50% 50% at 50% 50%, rgb(var(--atmo-cool) / 0.05), transparent 70%);
+    filter: blur(28px);
+    opacity: calc(0.7 * var(--atmo-intensity));
+    animation: monitor-breathe 9s ease-in-out infinite;
   }
 
   .ambient-flash {
@@ -305,6 +454,106 @@ textarea {
     position: absolute;
     inset: 0;
     background: radial-gradient(circle at 50% 38%, transparent 50%, rgba(2, 3, 5, 0.6));
+  }
+
+  /* ---- Custom cursor ----------------------------------------------------- */
+  .cursor-dot,
+  .cursor-ring {
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 90;
+    pointer-events: none;
+    border-radius: 9999px;
+    will-change: transform;
+  }
+  .cursor-dot {
+    width: 7px;
+    height: 7px;
+    margin: -3.5px 0 0 -3.5px;
+    background: var(--accent);
+    box-shadow: 0 0 12px rgb(var(--accent-rgb) / 0.8);
+  }
+  .cursor-ring {
+    width: 34px;
+    height: 34px;
+    margin: -17px 0 0 -17px;
+    border: 1px solid rgb(var(--accent-rgb) / 0.5);
+    transition: width 200ms ease, height 200ms ease, margin 200ms ease, border-color 200ms ease, background 200ms ease, opacity 200ms ease;
+  }
+  .cursor-ring.is-active {
+    width: 56px;
+    height: 56px;
+    margin: -28px 0 0 -28px;
+    background: rgb(var(--accent-rgb) / 0.06);
+    border-color: rgb(var(--accent-rgb) / 0.8);
+  }
+  .cursor-ring.is-hidden,
+  .cursor-dot.is-hidden {
+    opacity: 0;
+  }
+  /* Hide the native cursor only when our custom one is mounted (fine pointer). */
+  html.has-custom-cursor,
+  html.has-custom-cursor a,
+  html.has-custom-cursor button {
+    cursor: none;
+  }
+
+  /* ---- Audio / Focus-environment panel ---------------------------------- */
+  .audio-trigger {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.55rem;
+    border: 1px solid rgba(232, 225, 212, 0.14);
+    background: rgba(232, 225, 212, 0.04);
+    color: var(--muted);
+    transition: border-color 220ms ease, color 220ms ease, background 220ms ease, box-shadow 220ms ease;
+  }
+  .audio-trigger:hover,
+  .audio-trigger[data-active="true"] {
+    color: var(--text);
+    border-color: var(--accent-line);
+    background: rgb(var(--accent-rgb) / 0.08);
+    box-shadow: 0 0 26px rgb(var(--accent-rgb) / 0.14);
+  }
+  /* Tiny live equalizer bars in the trigger when audio is playing. */
+  .eq-bar {
+    width: 2px;
+    background: var(--accent);
+    border-radius: 2px;
+    transform-origin: bottom;
+    animation: eq-bounce 900ms ease-in-out infinite;
+  }
+  .eq-bar:nth-child(2) { animation-delay: 160ms; }
+  .eq-bar:nth-child(3) { animation-delay: 320ms; }
+
+  .audio-slider {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 3px;
+    border-radius: 9999px;
+    background: linear-gradient(90deg, var(--accent) var(--fill, 50%), rgba(232, 225, 212, 0.14) var(--fill, 50%));
+    outline: none;
+    cursor: pointer;
+  }
+  .audio-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 13px;
+    height: 13px;
+    border-radius: 9999px;
+    background: var(--text);
+    border: 2px solid rgb(var(--accent-rgb) / 0.9);
+    box-shadow: 0 0 12px rgb(var(--accent-rgb) / 0.4);
+  }
+  .audio-slider::-moz-range-thumb {
+    width: 13px;
+    height: 13px;
+    border-radius: 9999px;
+    background: var(--text);
+    border: 2px solid rgb(var(--accent-rgb) / 0.9);
   }
 
   /* ---- Cinematic boot --------------------------------------------------- */
@@ -389,6 +638,85 @@ textarea {
     letter-spacing: 0.24em;
     color: var(--faint);
   }
+
+  /* ---- Page transition --------------------------------------------------- */
+  .page-transition {
+    will-change: opacity, filter, transform;
+  }
+
+  /* ---- Video environmental backdrop ------------------------------------- */
+  .video-bg-media {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transform: scale(1.08);
+    filter: blur(2px) brightness(0.62) saturate(0.95) contrast(1.02);
+    opacity: 0.7;
+    transition: opacity 900ms ease, filter 900ms ease;
+  }
+  html[data-focus="on"] .video-bg-media {
+    filter: blur(3px) brightness(0.45) saturate(0.85);
+    opacity: 0.5;
+  }
+  .video-bg-grade {
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(75% 55% at 50% 0%, rgb(var(--accent-rgb) / 0.1), transparent 70%),
+      radial-gradient(60% 60% at 50% 110%, rgb(var(--atmo-warm) / 0.12), transparent 72%);
+    mix-blend-mode: screen;
+    opacity: calc(0.9 * var(--atmo-intensity));
+  }
+  .video-bg-scrim {
+    position: absolute;
+    inset: 0;
+    background:
+      linear-gradient(180deg, rgba(5, 5, 7, 0.72) 0%, rgba(5, 5, 7, 0.32) 26%, rgba(5, 5, 7, 0.42) 62%, rgba(4, 4, 6, 0.88) 100%),
+      radial-gradient(circle at 50% 42%, transparent 42%, rgba(2, 3, 5, 0.6));
+  }
+
+  /* ---- Atmosphere panel -------------------------------------------------- */
+  .atmosphere-panel {
+    box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  }
+
+  /* ---- Editorial section scrim (keeps type readable over the video) ------ */
+  .scrim-soft {
+    background: radial-gradient(120% 120% at 50% 50%, rgba(4, 5, 8, 0.55), transparent 75%);
+  }
+}
+
+@layer utilities {
+  /* Section rhythm helpers — generous vertical breathing room. */
+  .section-y {
+    padding-top: clamp(5rem, 3rem + 9vw, 11rem);
+    padding-bottom: clamp(5rem, 3rem + 9vw, 11rem);
+  }
+  .section-y-sm {
+    padding-top: clamp(3rem, 2rem + 5vw, 6rem);
+    padding-bottom: clamp(3rem, 2rem + 5vw, 6rem);
+  }
+  .text-balance {
+    text-wrap: balance;
+  }
+  .text-pretty {
+    text-wrap: pretty;
+  }
+  /* Accent helpers bound to the live theme variable. */
+  .text-accent {
+    color: var(--accent);
+  }
+  .bg-accent-soft {
+    background: var(--accent-soft);
+  }
+  .border-accent-line {
+    border-color: var(--accent-line);
+  }
+  .accent-glow {
+    text-shadow: 0 0 38px rgb(var(--accent-rgb) / 0.32);
+  }
 }
 
 @keyframes horizontal-scan {
@@ -428,6 +756,21 @@ textarea {
   98% { opacity: 0.4; }
 }
 
+@keyframes room-breathe {
+  0%, 100% { opacity: calc(0.6 * var(--atmo-intensity)); }
+  50% { opacity: calc(0.95 * var(--atmo-intensity)); }
+}
+
+@keyframes monitor-breathe {
+  0%, 100% { opacity: calc(0.55 * var(--atmo-intensity)); transform: translateX(-50%) scale(1); }
+  50% { opacity: calc(0.85 * var(--atmo-intensity)); transform: translateX(-50%) scale(1.04); }
+}
+
+@keyframes eq-bounce {
+  0%, 100% { transform: scaleY(0.4); }
+  50% { transform: scaleY(1); }
+}
+
 @keyframes boot-core-in {
   from { opacity: 0; transform: translateY(10px); }
   to { opacity: 1; transform: translateY(0); }
@@ -451,5 +794,18 @@ textarea {
     animation-iteration-count: 1 !important;
     scroll-behavior: auto !important;
     transition-duration: 0.001ms !important;
+  }
+}
+
+/* Coarse pointer (touch) → never show the custom cursor, never hide native. */
+@media (hover: none), (pointer: coarse) {
+  .cursor-dot,
+  .cursor-ring {
+    display: none !important;
+  }
+  html.has-custom-cursor,
+  html.has-custom-cursor a,
+  html.has-custom-cursor button {
+    cursor: auto;
   }
 }
